@@ -1,0 +1,53 @@
+name: Pages
+
+# Builds, checks and tests the game inside Docker, then deploys it to GitHub
+# Pages. Runs on every push to main, or by hand from the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never cancel a deployment halfway; a newer push waits for it to finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Same `dist` target as publish.yml. Only publish.yml writes the layer
+      # cache, so the two workflows don't race to save it.
+      - name: Build in Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: dist
+          outputs: type=local,dest=dist
+          cache-from: type=gha
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

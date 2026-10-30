@@ -5,6 +5,7 @@
 <p align="center">
 <!-- auto:badges -->
 <a href="https://echoness.itch.io/solar-system"><img alt="Play on itch.io" src="https://img.shields.io/badge/play-itch.io-FA5C5C?style=for-the-badge&amp;logo=itchdotio&amp;logoColor=white"></a>
+<a href="https://e-choness.github.io/solar-system-engine/"><img alt="Play on GitHub Pages" src="https://img.shields.io/badge/play-GitHub%20Pages-222222?style=for-the-badge&amp;logo=github&amp;logoColor=white"></a>
 <a href="https://github.com/e-choness/solar-system-engine/actions/workflows/publish.yml"><img alt="Publish" src="https://img.shields.io/github/actions/workflow/status/e-choness/solar-system-engine/publish.yml?branch=main&amp;style=for-the-badge&amp;label=publish&amp;logo=githubactions&amp;logoColor=white"></a>
 <br>
 <img alt="version" src="https://img.shields.io/badge/version-2.0.0-8ec5ff?style=flat-square"> <img alt="worlds" src="https://img.shields.io/badge/worlds-69-ffb35c?style=flat-square"> <a href="LICENSE.md"><img alt="license" src="https://img.shields.io/badge/license-PolyForm%20NC%201.0.0-lightgrey?style=flat-square"></a> <a href="https://threejs.org"><img alt="three.js" src="https://img.shields.io/badge/three.js-0.186.1-000000?style=flat-square&amp;logo=threedotjs&amp;logoColor=white"></a> <img alt="renderer" src="https://img.shields.io/badge/renderer-WebGPU%20·%20WebGL%202-005a9c?style=flat-square&amp;logo=webgpu&amp;logoColor=white"> <a href="https://svelte.dev"><img alt="Svelte" src="https://img.shields.io/badge/Svelte-5.57.3-ff3e00?style=flat-square&amp;logo=svelte&amp;logoColor=white"></a> <a href="https://vite.dev"><img alt="Vite" src="https://img.shields.io/badge/Vite-8.3.5-646cff?style=flat-square&amp;logo=vite&amp;logoColor=white"></a> <a href="https://www.typescriptlang.org"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6.0.3-3178c6?style=flat-square&amp;logo=typescript&amp;logoColor=white"></a> <a href="#development"><img alt="built in" src="https://img.shields.io/badge/built%20in-Docker-2496ed?style=flat-square&amp;logo=docker&amp;logoColor=white"></a>
@@ -17,7 +18,7 @@
 
 It is a ground-up remake of the [original 2021 Unity game](https://echoness.itch.io/solar-system), rebuilt on WebGPU with a glass interface and far more to explore.
 
-### ▶ [Play it free on itch.io](https://echoness.itch.io/solar-system) · [Watch the trailer](media/trailer.mp4)
+### ▶ [Play it free on itch.io](https://echoness.itch.io/solar-system) or [GitHub Pages](https://e-choness.github.io/solar-system-engine/) · [Watch the trailer](media/trailer.mp4)
 
 <p align="center"><a href="media/trailer.mp4"><img src="media/trailer-poster.jpg" alt="Watch the trailer (1:16)" width="80%"></a></p>
 
@@ -210,7 +211,7 @@ It is a ground-up remake of the [original 2021 Unity game](https://echoness.itch
 | Audio | Web Audio API: streamed soundtrack, spacecraft recordings, real-time synthesis for sonifications, convolution reverb |
 | Build | [Vite](https://vite.dev) 8.3.5 (Rolldown), [TypeScript](https://www.typescriptlang.org) 6.0.3, [Biome](https://biomejs.dev) 2.6.4, [Vitest](https://vitest.dev) 5.0.5 |
 | Assets | sharp, ffmpeg and JPL Horizons scripts, all run in Docker |
-| Delivery | GitHub Actions → Docker build → [butler](https://itch.io/docs/butler/) → itch.io |
+| Delivery | GitHub Actions → Docker build → [butler](https://itch.io/docs/butler/) → itch.io, plus [GitHub Pages](https://e-choness.github.io/solar-system-engine/) |
 <!-- /auto:stack -->
 
 - **Coordinates.** Bodies are positioned in heliocentric J2000 ecliptic kilometres in float64 on the CPU. Each frame the camera sits at the origin and everything is placed relative to it, so the GPU’s float32 never sees a large number. A logarithmic depth buffer spans 1 m to 100 light-years.
@@ -246,6 +247,8 @@ docker compose run --rm node npm run readme          # refresh this README and C
 ## Publishing
 
 Every push to `main` runs [`.github/workflows/publish.yml`](.github/workflows/publish.yml). It builds and tests inside Docker, then pushes `dist/` to [itch.io](https://echoness.itch.io/solar-system) with butler on the `html5` channel, versioned from `package.json`. The workflow reads the itch.io API key from the `BUTLER_API_KEY` repository secret (`BUTLER_CREDENTIALS` and `ITCH_API_KEY` are also accepted).
+
+The same push also runs [`.github/workflows/pages.yml`](.github/workflows/pages.yml), which builds the same Docker target and deploys `dist/` to [GitHub Pages](https://e-choness.github.io/solar-system-engine/). The build uses relative URLs, so it runs unchanged under the repository's `/solar-system-engine/` path. Pages must be set to deploy from **GitHub Actions** (Settings → Pages → Source).
 
 ## Media kit
 

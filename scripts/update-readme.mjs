@@ -16,6 +16,7 @@ const events = (read('src/ui/Events.svelte').match(/\{ when: '/g) ?? []).length;
 
 const REPO = 'e-choness/solar-system-engine';
 const ITCH = 'https://echoness.itch.io/solar-system';
+const PAGES = 'https://e-choness.github.io/solar-system-engine/';
 const ver = (name) => (pkg.dependencies?.[name] ?? pkg.devDependencies?.[name] ?? '').replace(/^[\^~]/, '');
 const esc = (s) => String(s).replaceAll('-', '--').replaceAll('_', '__').replaceAll(' ', '%20');
 // HTML rather than Markdown: the badges sit inside a centred <p>, where GitHub does not parse Markdown.
@@ -47,6 +48,11 @@ for (const b of CATALOG) sounds[b.audio.kind]++;
 const sections = {
   badges: [
     html('Play on itch.io', 'https://img.shields.io/badge/play-itch.io-FA5C5C?style=for-the-badge&logo=itchdotio&logoColor=white', ITCH),
+    html(
+      'Play on GitHub Pages',
+      'https://img.shields.io/badge/play-GitHub%20Pages-222222?style=for-the-badge&logo=github&logoColor=white',
+      PAGES,
+    ),
     html(
       'Publish',
       `https://img.shields.io/github/actions/workflow/status/${REPO}/publish.yml?branch=main&style=for-the-badge&label=publish&logo=githubactions&logoColor=white`,
@@ -124,7 +130,7 @@ const sections = {
     `| Audio | Web Audio API: streamed soundtrack, spacecraft recordings, real-time synthesis for sonifications, convolution reverb |`,
     `| Build | [Vite](https://vite.dev) ${ver('vite')} (Rolldown), [TypeScript](https://www.typescriptlang.org) ${ver('typescript')}, [Biome](https://biomejs.dev) ${ver('@biomejs/biome')}, [Vitest](https://vitest.dev) ${ver('vitest')} |`,
     `| Assets | sharp, ffmpeg and JPL Horizons scripts, all run in Docker |`,
-    `| Delivery | GitHub Actions → Docker build → [butler](https://itch.io/docs/butler/) → itch.io |`,
+    `| Delivery | GitHub Actions → Docker build → [butler](https://itch.io/docs/butler/) → itch.io, plus [GitHub Pages](${PAGES}) |`,
   ].join('\n'),
 
   credits: [
