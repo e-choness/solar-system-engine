@@ -17,7 +17,9 @@
 
 It is a ground-up remake of the [original 2021 Unity game](https://echoness.itch.io/solar-system), rebuilt on WebGPU with a glass interface and far more to explore.
 
-### ▶ [Play it free on itch.io](https://echoness.itch.io/solar-system)
+### ▶ [Play it free on itch.io](https://echoness.itch.io/solar-system) · [Watch the trailer](media/trailer.mp4)
+
+<p align="center"><a href="media/trailer.mp4"><img src="media/trailer-poster.jpg" alt="Watch the trailer (1:16)" width="80%"></a></p>
 
 ## Highlights
 
@@ -236,6 +238,8 @@ docker compose run --rm node npm run assets          # download and optimise map
 docker compose run --rm node npm run ephemeris       # refresh orbital elements from JPL Horizons
 docker compose run --rm browser node scripts/smoke.mjs earth saturn   # headless screenshots in .cache/smoke
 docker compose run --rm browser npm run media        # regenerate the media kit (needs the dev server)
+docker compose run --rm browser npm run trailer      # capture the trailer frame by frame (needs the dev server)
+docker compose run --rm node npm run trailer:encode  # mux frames + soundtrack into media/trailer.mp4
 docker compose run --rm node npm run readme          # refresh this README and CREDITS.md
 ```
 
@@ -255,6 +259,7 @@ Everything in [`media/`](media) is generated from the live app by `npm run media
 | [`social-card.png`](media/social-card.png) | Open Graph / social preview (1200×630) |
 | [`logo.png`](media/logo.png) | Square icon (512×512) |
 | [`screenshots/`](media/screenshots) | 1920×1080 in-app screenshots |
+| [`trailer.mp4`](media/trailer.mp4) · [`trailer-poster.jpg`](media/trailer-poster.jpg) | Feature trailer, 1080p30 with the original soundtrack (`npm run trailer`) |
 
 ## Credits
 

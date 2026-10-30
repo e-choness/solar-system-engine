@@ -7,6 +7,7 @@ import {
   instancedBufferAttribute,
   length,
   mix,
+  modelViewMatrix,
   normalize,
   positionWorldDirection,
   pow,
@@ -19,7 +20,9 @@ import {
   time,
   uniform,
   uv,
+  varying,
   vec3,
+  vec4,
 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { PLANET_ELEMENTS } from '../data/planet-elements.ts';
@@ -262,6 +265,7 @@ export class CometTail {
   readonly vel = uniform(new THREE.Vector3(0, 0, 1));
   readonly lengthKm = uniform(1);
   readonly activity = uniform(0);
+  private readonly comaFade = uniform(1);
   private readonly tail: THREE.Sprite;
   private readonly coma: THREE.Sprite;
 
@@ -286,12 +290,17 @@ export class CometTail {
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
     });
-    m.positionNode = mix(dustPos, ionPos, ion);
-    m.sizeNode = L.mul(mix(float(0.03), float(0.11), age)).mul(mix(float(1), float(0.5), ion));
+    const pos = mix(dustPos, ionPos, ion);
+    const size = L.mul(mix(float(0.03), float(0.11), age)).mul(mix(float(1), float(0.5), ion));
+    m.positionNode = pos;
+    m.sizeNode = size;
     m.colorNode = mix(vec3(1.0, 0.93, 0.8), vec3(0.45, 0.72, 1.0), ion).mul(disc());
     const fadeIn = smoothstep(0, 0.04, age);
+    // Puffs the camera sits in would wash out the whole view: fade them by apparent size.
+    const near = varying(float(1).sub(smoothstep(0.1, 0.5, size.div(length(modelViewMatrix.mul(vec4(pos, 1)).xyz)))));
     m.opacityNode = pow(float(1).sub(age), 1.6)
       .mul(fadeIn)
+      .mul(near)
       .mul(this.activity)
       .mul(mix(float(0.16), float(0.22), ion))
       .mul(disc());
@@ -305,7 +314,8 @@ export class CometTail {
     cm.colorNode = vec3(0.75, 0.88, 1.0).mul(
       pow(saturate(float(1).sub(d)), 3)
         .mul(1.4)
-        .mul(this.activity),
+        .mul(this.activity)
+        .mul(this.comaFade),
     );
     this.coma = new THREE.Sprite(cm);
     this.coma.renderOrder = 6;
@@ -327,6 +337,8 @@ export class CometTail {
     this.group.visible = act > 0.002;
     const comaSize = Math.max(len * 0.035, nucleusKm * 40);
     this.coma.scale.set(comaSize, comaSize, 1);
+    // Up close the coma sprite would fill the screen: fade it by apparent size (the group sits at the nucleus, camera-relative).
+    this.comaFade.value = 1 - THREE.MathUtils.smoothstep(comaSize / Math.max(this.group.position.length(), 1), 0.12, 0.7);
   }
 }
 

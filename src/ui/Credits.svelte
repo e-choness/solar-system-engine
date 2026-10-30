@@ -26,21 +26,13 @@
     id,
     name: TEXTURE_NAMES[id] ?? BODY_BY_ID.get(id)?.name ?? id,
     ...c,
-    author: c.author.replace(/\s+/g, ' ').trim(),
+    author: c.author.replace(/\s+/g, ' ').replace(/&amp;/g, '&').trim(),
   }));
   const recordings = Object.entries(credits.audio as Record<string, Credit>).map(([file, c]) => ({
     name: [...BODY_BY_ID.values()].find((b) => b.audio.src?.endsWith(file))?.name ?? file,
     ...c,
   }));
   const data = Object.values(credits.data as Record<string, Credit>);
-
-  const software: Array<[string, string, string]> = [
-    ['three.js', 'MIT', 'https://threejs.org'],
-    ['Svelte', 'MIT', 'https://svelte.dev'],
-    ['Vite', 'MIT', 'https://vite.dev'],
-    ['Lucide icons', 'ISC', 'https://lucide.dev'],
-    ['Inter, Space Grotesk, JetBrains Mono', 'SIL OFL 1.1', 'https://fontsource.org'],
-  ];
 </script>
 
 <div class="backdrop" role="presentation" onclick={() => (app.creditsOpen = false)}></div>
@@ -134,17 +126,6 @@
         <span class="who">NASA Planetary Fact Sheets, JPL SSD and Wikipedia</span>
         <span class="lic">Public domain / CC BY-SA</span>
       </li>
-    </ul>
-
-    <h3>Built with</h3>
-    <ul>
-      {#each software as [name, lic, url] (name)}
-        <li>
-          <a class="what" href={url} target="_blank" rel="noopener">{name}</a>
-          <span class="who"></span>
-          <span class="lic">{lic}</span>
-        </li>
-      {/each}
     </ul>
   </div>
 </div>
