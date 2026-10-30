@@ -1,0 +1,47 @@
+{
+  "name": "solar-system-engine",
+  "version": "2.0.0",
+  "private": true,
+  "description": "A true-scale, explorable 3D solar system for the browser. Rebuilt from the 2021 Unity original.",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "author": "Echo Yin (echoness)",
+  "repository": "github:e-choness/solar-system-engine",
+  "homepage": "https://echoness.itch.io/solar-system",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json && biome check .",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "assets": "node scripts/fetch-assets.mjs",
+    "ephemeris": "node scripts/fetch-ephemeris.mjs",
+    "readme": "node scripts/update-readme.mjs",
+    "media": "node scripts/media-kit.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
+    "@lucide/svelte": "^1.64.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.4",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "^24.19.2",
+    "@types/three": "^0.186.0",
+    "playwright": "1.64.1",
+    "sharp": "^0.35.5",
+    "svelte": "^5.57.3",
+    "svelte-check": "^4.7.7",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

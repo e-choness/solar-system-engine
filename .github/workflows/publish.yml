@@ -1,0 +1,79 @@
+name: Publish
+
+# Builds, checks and tests the game inside Docker, then pushes it to itch.io
+# with butler. Runs on every push to main, or by hand from the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: publish
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      # The `dist` target runs `npm run check`, `npm test` and `npm run build`
+      # in the build stage, then exports only the static site.
+      - name: Build in Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: dist
+          outputs: type=local,dest=dist
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
+
+  publish:
+    name: Push to itch.io
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build butler image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: butler
+          tags: butler:local
+          load: true
+          cache-from: type=gha,scope=butler
+          cache-to: type=gha,scope=butler,mode=max
+
+      - name: Push html5 channel
+        env:
+          # Accept the common names for the itch.io API key secret.
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY || secrets.BUTLER_CREDENTIALS || secrets.ITCH_API_KEY || secrets.ITCHIO_API_KEY || secrets.ITCH_IO_API_KEY }}
+        run: |
+          if [ -z "$BUTLER_API_KEY" ]; then
+            echo "::error::No itch.io API key found. Add it as the BUTLER_API_KEY repository secret."
+            exit 1
+          fi
+          version=$(jq -r .version package.json)
+          docker run --rm -e BUTLER_API_KEY -v "$PWD/dist:/dist:ro" butler:local \
+            push /dist echoness/solar-system:html5 --userversion "$version-${GITHUB_SHA::7}"
+          docker run --rm -e BUTLER_API_KEY butler:local status echoness/solar-system:html5

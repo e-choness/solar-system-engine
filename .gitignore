@@ -2,3 +2,22 @@
 docs/
 CLADUE.md
 .claude/
+
+# Dependencies and build output (all produced inside Docker)
+node_modules/
+dist/
+.vite/
+coverage/
+test-results/
+playwright-report/
+.cache/
+
+# Asset pipeline scratch (raw downloads before optimisation)
+.asset-cache/
+
+# Env / OS noise
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db

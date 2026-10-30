@@ -1,0 +1,311 @@
+{
+  "textures": {
+    "sun": {
+      "title": "8k_sun.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "mercury": {
+      "title": "8k_mercury.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "venus-atmosphere": {
+      "title": "4k_venus_atmosphere.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "earth": {
+      "title": "8k_earth_daymap.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "earth-night": {
+      "title": "8k_earth_nightmap.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "earth-clouds": {
+      "title": "8k_earth_clouds.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "earth-normal": {
+      "title": "8k_earth_normal_map.tif",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "earth-specular": {
+      "title": "8k_earth_specular_map.tif",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "moon": {
+      "title": "8k_moon.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "mars": {
+      "title": "8k_mars.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "jupiter": {
+      "title": "8k_jupiter.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "saturn": {
+      "title": "8k_saturn.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "saturn-ring": {
+      "title": "8k_saturn_ring_alpha.png",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "uranus": {
+      "title": "2k_uranus.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "neptune": {
+      "title": "2k_neptune.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "eris": {
+      "title": "4k_eris_fictional.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": true
+    },
+    "haumea": {
+      "title": "4k_haumea_fictional.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": true
+    },
+    "makemake": {
+      "title": "4k_makemake_fictional.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": true
+    },
+    "stars": {
+      "title": "8k_stars_milky_way.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": false
+    },
+    "ceres": {
+      "title": "4k_ceres_fictional.jpg",
+      "author": "Solar System Scope (INOVE)",
+      "license": "CC BY 4.0",
+      "url": "https://www.solarsystemscope.com/textures/",
+      "impression": true
+    },
+    "vesta": {
+      "title": "Vesta map for GeoHack.png",
+      "author": "NASA/JPL-Caltech/UCLA/MPS/DLR/IDA",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Vesta_map_for_GeoHack.png",
+      "impression": false
+    },
+    "phobos": {
+      "title": "Phobos map by Askaniy.png",
+      "author": "Askaniy Anpilogov, Phil Stooke",
+      "license": "CC BY-SA 3.0",
+      "url": "https://commons.wikimedia.org/wiki/File:Phobos_map_by_Askaniy.png",
+      "impression": false
+    },
+    "deimos": {
+      "title": "Deimos map by Askaniy.png",
+      "author": "Askaniy Anpilogov, John van Vliet",
+      "license": "CC BY-SA 3.0",
+      "url": "https://commons.wikimedia.org/wiki/File:Deimos_map_by_Askaniy.png",
+      "impression": false
+    },
+    "io": {
+      "title": "Io modest scale map Io SSI-only color SIMP0 med.cub.jpg",
+      "author": "USGS Astrogeology Science Center",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Io_modest_scale_map_Io_SSI-only_color_SIMP0_med.cub.jpg",
+      "impression": false
+    },
+    "europa": {
+      "title": "Europa Voyager GalileoSSI global mosaic.jpg",
+      "author": "U.S. Geological Survey / Planetary Data System / Tammy Becker",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Europa_Voyager_GalileoSSI_global_mosaic.jpg",
+      "impression": false
+    },
+    "ganymede": {
+      "title": "Ganymede map by Askaniy.png",
+      "author": "Askaniy Anpilogov, USGS, Björn Jónsson, NASA/JPL-Caltech/SwRI/MSSS/Brian Swift",
+      "license": "CC BY-SA 3.0",
+      "url": "https://commons.wikimedia.org/wiki/File:Ganymede_map_by_Askaniy.png",
+      "impression": false
+    },
+    "callisto": {
+      "title": "Callisto map by Askaniy.png",
+      "author": "Askaniy Anpilogov, John van Vliet",
+      "license": "CC BY-SA 3.0",
+      "url": "https://commons.wikimedia.org/wiki/File:Callisto_map_by_Askaniy.png",
+      "impression": false
+    },
+    "mimas": {
+      "title": "Map of Mimas colorized 2014-04 PIA18437.jpg",
+      "author": "NASA/JPL-Caltech/Space Science Institute/Lunar and Planetary Institute",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Map_of_Mimas_colorized_2014-04_PIA18437.jpg",
+      "impression": false
+    },
+    "enceladus": {
+      "title": "Color map of Enceladus PIA18435 (modified).jpg",
+      "author": "NASA",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Color_map_of_Enceladus_PIA18435_(modified).jpg",
+      "impression": false
+    },
+    "tethys": {
+      "title": "Tethys Color Map.jpg",
+      "author": "NASA/JPL-Caltech/Space Science Institute/Lunar and Planetary Institute",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Tethys_Color_Map.jpg",
+      "impression": false
+    },
+    "dione": {
+      "title": "Dione Color Map.jpg",
+      "author": "NASA/JPL-Caltech/Space Science Institute/Lunar and Planetary Institute",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Dione_Color_Map.jpg",
+      "impression": false
+    },
+    "rhea": {
+      "title": "Rhea Color Map.jpg",
+      "author": "NASA/JPL-Caltech/Space Science Institute/Lunar and Planetary Institute",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Rhea_Color_Map.jpg",
+      "impression": false
+    },
+    "iapetus": {
+      "title": "Iapetus Color Map.jpg",
+      "author": "NASA/JPL-Caltech/Space Science Institute/Lunar and Planetary Institute",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Iapetus_Color_Map.jpg",
+      "impression": false
+    },
+    "titan": {
+      "title": "Titan map April 2011 full.png",
+      "author": "NASA",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Titan_map_April_2011_full.png",
+      "impression": false
+    },
+    "miranda": {
+      "title": "Miranda map.jpg",
+      "author": "NASA/Robin Gilbert",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Miranda_map.jpg",
+      "impression": false
+    },
+    "ariel": {
+      "title": "Ariel map JPL USGS.jpg",
+      "author": "Caltech/JPL/USGS",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Ariel_map_JPL_USGS.jpg",
+      "impression": false
+    },
+    "umbriel": {
+      "title": "Umbriel map JPL USGS.jpg",
+      "author": "Caltech/JPL/USGS",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Umbriel_map_JPL_USGS.jpg",
+      "impression": false
+    },
+    "titania": {
+      "title": "Titania map JPL USGS.jpg",
+      "author": "Caltech/JPL/USGS",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Titania_map_JPL_USGS.jpg",
+      "impression": false
+    },
+    "oberon": {
+      "title": "Oberon map JPL USGS.jpg",
+      "author": "Caltech/JPL/USGS",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Oberon_map_JPL_USGS.jpg",
+      "impression": false
+    },
+    "triton": {
+      "title": "Triton Map.jpg",
+      "author": "NASA/JPL-Caltech/Lunar &amp; Planetary Institute",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Triton_Map.jpg",
+      "impression": false
+    },
+    "pluto": {
+      "title": "Pluto color mapmosaic.jpg",
+      "author": "NASA / Johns Hopkins University Applied Physics Laboratory / Southwest Research Institute",
+      "license": "Public domain",
+      "url": "https://commons.wikimedia.org/wiki/File:Pluto_color_mapmosaic.jpg",
+      "impression": false
+    }
+  },
+  "audio": {
+    "europa-juno.mp3": {
+      "author": "NASA/JPL-Caltech/SwRI/University of Iowa",
+      "license": "CC BY 3.0",
+      "url": "https://space.physics.uiowa.edu/plasma-wave/juno/audio/202209/jno-E45-LFRH-Europa-fuh-22-272-0836-1006-blk.html"
+    },
+    "ganymede-juno.m4a": {
+      "author": "NASA/JPL-Caltech/SwRI/University of Iowa",
+      "license": "NASA media guidelines",
+      "url": "https://photojournal.jpl.nasa.gov/catalog/PIA25030"
+    }
+  },
+  "data": {
+    "stars": {
+      "title": "Yale Bright Star Catalogue, 5th ed. (V/50)",
+      "author": "Hoffleit & Warren, via CDS VizieR",
+      "license": "CDS terms (free with acknowledgement)",
+      "url": "https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50"
+    }
+  }
+}

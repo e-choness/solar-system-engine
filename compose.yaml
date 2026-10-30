@@ -1,0 +1,40 @@
+# docker compose up dev            -> http://localhost:5173 (set DEV_PORT to use another host port)
+# docker compose run --rm node npm test
+# docker compose run --rm node npm run assets
+# docker compose run --rm browser npm run media
+name: solar-system
+
+x-app: &app
+  working_dir: /app
+  volumes:
+    - .:/app
+    - node_modules:/app/node_modules
+  environment:
+    DOCKER: "1"
+
+services:
+  dev:
+    <<: *app
+    build: { context: ., target: dev }
+    ports: ["${DEV_PORT:-5173}:5173"]
+    # Not "dev": Chromium force-upgrades the HSTS-preloaded .dev TLD to HTTPS.
+    networks: { default: { aliases: [solar-dev] } }
+
+  node:
+    <<: *app
+    build: { context: ., target: base }
+    profiles: [tools]
+    command: ["npm", "run", "check"]
+
+  browser:
+    <<: *app
+    build: { context: ., target: browser }
+    profiles: [tools]
+    ipc: host
+    depends_on: [dev]
+    environment:
+      DOCKER: "1"
+      APP_URL: http://solar-dev:5173
+
+volumes:
+  node_modules:

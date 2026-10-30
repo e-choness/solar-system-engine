@@ -1,0 +1,293 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/space-grotesk';
+@import '@fontsource-variable/jetbrains-mono';
+
+:root {
+  --font-ui: 'Inter Variable', system-ui, sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Inter Variable', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --text: rgba(238, 243, 255, 0.94);
+  --text-dim: rgba(205, 215, 240, 0.66);
+  --text-faint: rgba(190, 200, 230, 0.42);
+  --accent: #8ec5ff;
+  --accent-2: #c8a8ff;
+  --warm: #ffcf8a;
+  --danger: #ff8a8a;
+
+  --glass-bg:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035) 55%, rgba(140, 170, 255, 0.05)),
+    linear-gradient(rgba(8, 12, 26, 0.38), rgba(8, 12, 26, 0.38));
+  --glass-strong: linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-hilite: rgba(255, 255, 255, 0.22);
+  --glass-blur: blur(22px) saturate(150%) brightness(0.72);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --radius: 20px;
+  --radius-sm: 12px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --kind-star: #ffd27a;
+  --kind-planet: #79b4ff;
+  --kind-dwarf: #c39dff;
+  --kind-moon: #86e0cb;
+  --kind-asteroid: #e0b37a;
+  --kind-comet: #9edcff;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.glass {
+  position: relative;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow:
+    var(--shadow),
+    inset 0 1px 0 var(--glass-hilite),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* Specular sheen along the top edge of glass panels. */
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(120% 60% at 15% -10%, rgba(255, 255, 255, 0.14), transparent 55%);
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition:
+    background 0.2s var(--ease),
+    color 0.2s var(--ease),
+    border-color 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.icon-btn:active {
+  transform: scale(0.94);
+}
+
+.icon-btn.active {
+  background: rgba(142, 197, 255, 0.16);
+  color: var(--accent);
+  border-color: rgba(142, 197, 255, 0.3);
+}
+
+.pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background 0.2s var(--ease),
+    border-color 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+
+.pill-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.pill-btn.primary {
+  background: linear-gradient(135deg, rgba(142, 197, 255, 0.35), rgba(200, 168, 255, 0.3));
+  border-color: rgba(170, 200, 255, 0.45);
+}
+
+.pill-btn.primary:hover {
+  background: linear-gradient(135deg, rgba(142, 197, 255, 0.5), rgba(200, 168, 255, 0.42));
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-dim);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+/* ───────────── 3D labels (created by the engine) */
+.labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: auto;
+  cursor: pointer;
+  white-space: nowrap;
+  will-change: transform, opacity;
+  /* Engine sets transform to the body's screen position; centre vertically on it. */
+  translate: 0 -50%;
+  --c: var(--kind-planet);
+}
+
+.label-ring {
+  width: calc(var(--ring) * 2);
+  height: calc(var(--ring) * 2);
+  margin-left: calc(var(--ring) * -1);
+  margin-top: 0;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--c) 70%, transparent);
+  opacity: 0;
+  transition:
+    opacity 0.25s var(--ease),
+    transform 0.25s var(--ease);
+  transform: scale(0.8);
+}
+
+.label-name {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--c) 55%, white);
+  text-shadow:
+    0 0 6px rgba(0, 0, 0, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.8);
+  transition: color 0.2s var(--ease);
+}
+
+.label.kind-star {
+  --c: var(--kind-star);
+}
+.label.kind-planet .label-name {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.label.kind-dwarf {
+  --c: var(--kind-dwarf);
+}
+.label.kind-moon {
+  --c: var(--kind-moon);
+}
+.label.kind-moon .label-name {
+  font-size: 11.5px;
+}
+.label.kind-asteroid {
+  --c: var(--kind-asteroid);
+}
+.label.kind-asteroid .label-name,
+.label.kind-comet .label-name {
+  font-size: 11px;
+}
+.label.kind-comet {
+  --c: var(--kind-comet);
+}
+
+.label:hover .label-ring,
+.label.hovered .label-ring,
+.label.selected .label-ring {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.label:hover .label-name,
+.label.hovered .label-name,
+.label.selected .label-name {
+  color: white;
+}
+
+.label.selected .label-ring {
+  border-color: white;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--c) 60%, transparent);
+}
+
+.viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
