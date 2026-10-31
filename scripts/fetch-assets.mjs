@@ -1,7 +1,7 @@
 // Downloads open-licensed textures, recordings and the bright-star catalog,
 // optimises them, and records attribution in src/data/generated/credits.json.
 //
-// Run in Docker: docker compose run --rm node npm run assets
+// Run in Docker: docker compose run --rm node npm run assets [textures|audio|stars] [texture ids…]
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,10 +16,15 @@ const UA = { 'User-Agent': 'solar-system-engine asset pipeline (https://github.c
 
 const SSS = 'https://www.solarsystemscope.com/textures/download/';
 const SSS_CREDIT = { author: 'Solar System Scope (INOVE)', license: 'CC BY 4.0', url: 'https://www.solarsystemscope.com/textures/' };
+/** USGS Astrogeology global mosaics (public domain). */
+const USGS = 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/';
 
 /**
- * id → source. `size` is the long edge of the high-res variant; every texture
- * also gets a 1024 px `.lo` variant that loads first.
+ * id → source: Solar System Scope (`sss`), Wikimedia Commons titles tried in
+ * order (`commons`), or a direct download (`url` + `credit`). `size` is the
+ * long edge of the high-res variant; every texture also gets a 1024 px `.lo`
+ * variant that loads first. `match` scales a map so its mean color equals the
+ * body's catalog color (for greyscale or albedo maps).
  */
 const TEXTURES = {
   sun: { sss: '8k_sun.jpg', size: 2048 },
@@ -43,15 +48,31 @@ const TEXTURES = {
   stars: { sss: '8k_stars_milky_way.jpg', size: 8192, quality: 82 },
 
   ceres: {
-    commons: ['Ceres map by Askaniy.png', 'Ceres map for GeoHack.jpg'],
-    fallback: { sss: '4k_ceres_fictional.jpg', impression: true },
-    size: 2048,
+    // Dawn Framing Camera, 140 m/px; centred on 180° E.
+    url: `${USGS}Ceres_Dawn_FC_DLR_global_20ppd_Oct2015.tif`,
+    credit: {
+      title: 'Ceres Dawn FC global mosaic (DLR, 20 px/°)',
+      author: 'NASA/JPL-Caltech/UCLA/MPS/DLR/IDA, USGS Astrogeology',
+      license: 'Public domain',
+    },
+    match: '#8a8580',
+    size: 4096,
   },
   vesta: { commons: ['Vesta map by Askaniy.png', 'Vesta map for GeoHack.png'], size: 2048 },
   phobos: { commons: ['Phobos map by Askaniy.png', 'Phobos Viking Mosaic DLRcontrol 7200.jpg'], size: 2048 },
   deimos: { commons: ['Deimos map by Askaniy.png', 'Deimos color map.jpg'], size: 2048 },
-  io: { commons: ['Io map by Askaniy.png', 'Io modest scale map Io SSI-only color SIMP0 med.cub.jpg'], size: 4096 },
-  europa: { commons: ['Europa map by Askaniy.png', 'Europa Voyager GalileoSSI global mosaic.jpg'], size: 4096 },
+  io: {
+    // Galileo SSI color merged with Voyager, 1 km/px; centred on 0°.
+    url: `${USGS}Io_GalileoSSI-Voyager_Global_Mosaic_ClrMerge_1km.tif`,
+    credit: {
+      title: 'Io Galileo SSI–Voyager global color mosaic (1 km/px)',
+      author: 'NASA/JPL, USGS Astrogeology',
+      license: 'Public domain',
+    },
+    size: 4096,
+  },
+  // Galileo + Voyager color, centred on 180° W.
+  europa: { commons: ['Moon Europa color map.jpg'], size: 4096 },
   ganymede: { commons: ['Ganymede map by Askaniy.png', 'Map of Ganymede by Björn Jónsson.jpg'], size: 4096 },
   callisto: { commons: ['Callisto map by Askaniy.png', 'Callisto USGS global small.jpg'], size: 4096 },
   mimas: { commons: ['Map of Mimas colorized 2014-04 PIA18437.jpg'], size: 2048 },
@@ -68,6 +89,10 @@ const TEXTURES = {
   oberon: { commons: ['Oberon map JPL USGS.jpg'], size: 1440 },
   triton: { commons: ['Triton Map.jpg'], size: 4096 },
   pluto: { commons: ['Pluto color mapmosaic.jpg'], size: 4096 },
+  // New Horizons encounter hemisphere, centred on 0° (the sub-Pluto point).
+  charon: { commons: ['Charon map iau1803c.jpg'], size: 4096 },
+  bennu: { commons: ['Bennu map by Askaniy (albedo).png'], match: '#3c3a38', size: 2048 },
+  ryugu: { commons: ['Ryugu albedo map by Askaniy (enhanced).png', 'Ryugu albedo map by Askaniy.png'], match: '#3a3836', size: 2048 },
 };
 
 const RECORDINGS = {
@@ -144,9 +169,20 @@ async function commonsInfo(title, width) {
   throw new Error(`Commons API unavailable for ${title}`);
 }
 
+/** The map as 8-bit RGB scaled per channel so its mean sRGB color is `hex`. */
+async function matchColor(raw, hex) {
+  // Widen to RGB first: linear() cannot add bands to a greyscale map.
+  const rgb = await sharp(raw, { limitInputPixels: false }).removeAlpha().toColourspace('srgb').raw().toBuffer({ resolveWithObject: true });
+  const img = () => sharp(rgb.data, { raw: rgb.info, limitInputPixels: false });
+  const { channels } = await img().stats();
+  const gains = [1, 3, 5].map((k, c) => Number.parseInt(hex.slice(k, k + 2), 16) / Math.max(1, channels[c].mean));
+  const out = await img().linear(gains, [0, 0, 0]).raw().toBuffer({ resolveWithObject: true });
+  return sharp(out.data, { raw: out.info, limitInputPixels: false });
+}
+
 async function writeTexture(id, raw, spec) {
   const encode = (img) => img.webp({ quality: spec.quality ?? 86, alphaQuality: 90, effort: 5 });
-  const base = sharp(raw, { limitInputPixels: false });
+  const base = spec.match ? await matchColor(raw, spec.match) : sharp(raw, { limitInputPixels: false });
   const prep = (img) => (spec.grey ? img.greyscale() : img);
   if (spec.strip) {
     // Ring strips keep their aspect ratio and alpha channel.
@@ -164,16 +200,21 @@ async function writeTexture(id, raw, spec) {
   await encode(prep(base.clone()).removeAlpha().resize(1024, 512, { fit: 'fill' })).toFile(path.join(TEX, `${id}.lo.webp`));
 }
 
-async function textures(credits) {
+async function textures(credits, ids) {
   for (const [id, spec] of Object.entries(TEXTURES)) {
+    if (ids.length && !ids.includes(id)) continue;
     let source = null;
-    if (spec.commons) {
+    if (spec.url) {
+      const raw = await download(spec.url, path.join(CACHE, path.basename(new URL(spec.url).pathname)));
+      source = { raw, credit: { ...spec.credit, url: spec.url } };
+    }
+    if (spec.commons && !source) {
       for (const title of spec.commons) {
         const info = await commonsInfo(title, spec.size);
         await sleep(1500);
         if (!info) continue;
-        const ext = path.extname(title).toLowerCase() || '.jpg';
-        const raw = await download(info.url, path.join(CACHE, `${id}${ext}`));
+        // Keyed by title, so switching a body to another map never reuses the old download.
+        const raw = await download(info.url, path.join(CACHE, title.replace(/[^\w.-]+/g, '_')));
         source = { raw, credit: { title, author: info.author, license: info.license, url: info.page } };
         break;
       }
@@ -251,7 +292,7 @@ async function stars(credits) {
 for (const dir of [CACHE, TEX, AUDIO, DATA, path.dirname(CREDITS)]) fs.mkdirSync(dir, { recursive: true });
 const credits = { textures: {}, audio: {}, data: {} };
 const only = process.argv[2];
-if (!only || only === 'textures') await textures(credits);
+if (!only || only === 'textures') await textures(credits, process.argv.slice(3));
 if (!only || only === 'audio') await recordings(credits);
 if (!only || only === 'stars') await stars(credits);
 

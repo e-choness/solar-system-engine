@@ -21,6 +21,7 @@
     "test": "vitest run",
     "assets": "node scripts/fetch-assets.mjs",
     "ephemeris": "node scripts/fetch-ephemeris.mjs",
+    "loudness": "node scripts/measure-loudness.mjs",
     "readme": "node scripts/update-readme.mjs",
     "media": "node scripts/media-kit.mjs",
     "trailer": "node scripts/trailer.mjs",

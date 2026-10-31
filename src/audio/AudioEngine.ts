@@ -1,5 +1,6 @@
 import type { BodyDef } from '../data/types.ts';
 import type { Settings } from '../engine/settings.ts';
+import { clipGain } from './loudness.ts';
 import { sonify, type Voice } from './sonify.ts';
 
 const AUDIO = `${import.meta.env.BASE_URL}audio/`;
@@ -85,11 +86,11 @@ export class AudioEngine {
     el.play().catch(() => undefined);
 
     // Ambient beds from the original game: a soft hum near the Sun, a darker drone in deep space.
-    this.loop('original/drone-hum.m4a', this.ambience, 0.5);
+    this.loop('original/drone-hum.m4a', this.ambience);
     this.deepLayer = ctx.createGain();
     this.deepLayer.gain.value = 0;
     this.deepLayer.connect(this.ambience);
-    this.loop('original/drone-dark.m4a', this.deepLayer, 0.8);
+    this.loop('original/drone-dark.m4a', this.deepLayer);
   }
 
   applySettings(s: Settings) {
@@ -129,14 +130,15 @@ export class AudioEngine {
     return p;
   }
 
-  private async loop(path: string, out: AudioNode, gain: number) {
+  /** Loops a clip at the common loudness. */
+  private async loop(path: string, out: AudioNode) {
     const buf = await this.buffer(path).catch(() => null);
     if (!buf || !this.ctx) return;
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     src.loop = true;
     const g = this.ctx.createGain();
-    g.gain.value = gain;
+    g.gain.value = clipGain(path);
     src.connect(g).connect(out);
     src.start();
   }
@@ -178,7 +180,8 @@ export class AudioEngine {
       src.loop = true;
       src.connect(g);
       src.start();
-      g.gain.linearRampToValueAtTime(1, ctx.currentTime + 1.5);
+      // The original clips were mastered anywhere from −29 to −15 LUFS: play them all at one loudness.
+      g.gain.linearRampToValueAtTime(clipGain(def.audio.src), ctx.currentTime + 1.5);
     } else {
       voice = sonify(ctx, def, this.body, this.reverb);
       this.current = { id, voice };

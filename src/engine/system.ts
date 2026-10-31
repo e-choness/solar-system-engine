@@ -5,8 +5,12 @@ import type { BodyDef } from '../data/types.ts';
 import {
   AU_KM,
   DEG,
-  type Elements,
-  elementsAt,
+  decodeSeries,
+  dot,
+  type ElementSeries,
+  type EncodedSeries,
+  elementsFromState,
+  INVARIABLE_POLE,
   iauOrientation,
   J2000,
   lockedOrientation,
@@ -16,14 +20,32 @@ import {
   positionFromSnapshot,
   rotZ,
   type Snapshot,
+  seriesAt,
   type Vec3,
 } from './astro.ts';
+import { moonPosition } from './moon.ts';
 
-interface EphemerisEntry extends Elements {
+interface EphemerisEntry extends ElementSeries {
   center: string;
   barycentric?: boolean;
 }
-const EPHEMERIS = (ephemeris as unknown as { bodies: Record<string, EphemerisEntry> }).bodies;
+const EPHEMERIS: Record<string, EphemerisEntry> = Object.fromEntries(
+  Object.entries(
+    (ephemeris as unknown as { bodies: Record<string, EncodedSeries & { center: string; barycentric?: boolean }> }).bodies,
+  ).map(([id, s]) => [id, { center: s.center, barycentric: s.barycentric, ...decodeSeries(s) }]),
+);
+
+/** GM of the Earth + Moon (km³/s²), in km³/day². */
+const MU_EARTH_MOON = 403503.235 * 86400 ** 2;
+
+/** Osculating orbit of the Moon around the Earth from the lunar theory (src/engine/moon.ts). */
+function moonSnapshot(jd: number): Snapshot {
+  const h = 0.01;
+  const a = moonPosition(jd - h);
+  const b = moonPosition(jd + h);
+  const v: Vec3 = [(b[0] - a[0]) / (2 * h), (b[1] - a[1]) / (2 * h), (b[2] - a[2]) / (2 * h)];
+  return elementsFromState(moonPosition(jd), v, MU_EARTH_MOON);
+}
 
 /** Mean elements of a planet (or Pluto) from the JPL approximate-position table. */
 export function planetSnapshot(id: string, jd: number): Snapshot | null {
@@ -43,12 +65,12 @@ export function planetSnapshot(id: string, jd: number): Snapshot | null {
   };
 }
 
-/** Orbital period (days) for any body with an orbit. */
+/** Mean orbital (sidereal) period in days for any body with an orbit. */
 export function orbitalPeriodDays(id: string): number | null {
-  const p = PLANET_ELEMENTS[id];
-  if (p) return (360 / p.L[1]) * 36525;
   const e = EPHEMERIS[id];
-  return e ? 360 / Math.abs(e.n) : null;
+  if (e) return 360 / Math.abs(e.n);
+  const p = PLANET_ELEMENTS[id];
+  return p ? (360 / p.L[1]) * 36525 : null;
 }
 
 export class BodyState {
@@ -91,7 +113,8 @@ export class BodyState {
 
   /** Orbital elements usable for drawing (null for the Sun). */
   orbitElements(jd: number): Snapshot | null {
-    return planetSnapshot(this.def.id, jd) ?? (this.ephemeris ? elementsAt(this.ephemeris, jd) : null);
+    if (this.def.id === 'moon') return moonSnapshot(jd);
+    return this.ephemeris ? seriesAt(this.ephemeris, jd) : planetSnapshot(this.def.id, jd);
   }
 }
 
@@ -175,7 +198,13 @@ export class SolarSystem {
     const d = b.def;
     let m: Mat3;
     if (d.tidallyLocked && b.snapshot) {
-      m = lockedOrientation(b.rel, orbitNormal(b.snapshot));
+      // IAU north for a planet's satellite is on the north side of the invariable
+      // plane, so moons circling "backwards" (Triton, and Uranus's moons, which
+      // follow its retrograde spin) have north opposite their orbit normal.
+      // Dwarf-planet systems (Pluto–Charon) use the right-hand pole instead.
+      const n = orbitNormal(b.snapshot);
+      const flip = b.parent?.def.kind === 'planet' && dot(n, INVARIABLE_POLE) < 0;
+      m = lockedOrientation(b.rel, flip ? [-n[0], -n[1], -n[2]] : n);
     } else if (d.rotation) {
       const w = d.rotation.w0 + d.rotation.wDot * (jd - J2000);
       m = iauOrientation(d.rotation.ra, d.rotation.dec, w);

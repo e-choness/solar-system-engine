@@ -260,7 +260,9 @@ export class Engine {
     if (!body || !view) return;
     this.select(id);
     view.requestHighRes(this.bank);
-    const ringed = Boolean(body.def.visual.rings && body.def.visual.rings.opacity > 0.5);
+    // Broad, bright ring systems (Saturn) widen the framing; narrow ringlets (Uranus, Neptune) don't.
+    const rings = body.def.visual.rings;
+    const ringed = Boolean(rings && !rings.ringlets && rings.opacity > 0.5);
     const distance = body.def.kind === 'star' ? view.extent * 6 : ringed ? view.outerExtent * 2.6 : view.extent * 4.2;
     const sunDir = new THREE.Vector3(-body.pos[0], -body.pos[2], body.pos[1]).normalize();
     const camDir = new THREE.Vector3(

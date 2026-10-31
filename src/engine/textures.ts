@@ -74,13 +74,21 @@ export class TextureBank {
     const e = this.entries.get(id);
     if (!e) return null;
     if (!e.hiPromise) {
-      e.hiPromise = this.loader.loadAsync(`${BASE}${id}.webp`).then((t) => {
-        e.hi = this.configure(id, t);
-        for (const fn of e.listeners) fn(e.hi);
-        e.listeners.length = 0;
-        e.lo.dispose();
-        return e.hi;
-      });
+      e.hiPromise = this.loader
+        .loadAsync(`${BASE}${id}.webp`)
+        .then((t) => {
+          e.hi = this.configure(id, t);
+          for (const fn of e.listeners) fn(e.hi);
+          e.listeners.length = 0;
+          e.lo.dispose();
+          return e.hi;
+        })
+        .catch((err) => {
+          // Keep showing the low tier; the next upgrade() call retries.
+          console.warn(`texture ${id}: high-resolution tier failed to load`, err);
+          e.hiPromise = null;
+          return e.lo;
+        });
     }
     return e.hiPromise;
   }

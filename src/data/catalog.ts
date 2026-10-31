@@ -147,7 +147,8 @@ export const CATALOG: BodyDef[] = [
     visual: {
       map: 'mars',
       color: '#c1623b',
-      atmosphere: { color: '#e8a070', sunset: '#6f9fd8', height: 0.02, density: 0.4 },
+      // Suspended dust scatters red-orange. (The famous blue sunsets are seen from the ground, looking toward the Sun.)
+      atmosphere: { color: '#d8704a', sunset: '#9a3a1e', height: 0.02, density: 0.45 },
     },
     audio: orig('mars', plasma),
     discovered: 'Known since antiquity',
@@ -246,7 +247,25 @@ export const CATALOG: BodyDef[] = [
       map: 'uranus',
       color: '#a6dde6',
       atmosphere: { color: '#a8eef5', height: 0.02, density: 0.55 },
-      rings: { inner: 41837, outer: 51149, color: '#7d8590', opacity: 0.22 },
+      // Voyager 2 / Keck: thirteen narrow, dark rings; ε is the widest (20–96 km) and most opaque.
+      rings: {
+        inner: 41000,
+        outer: 52000,
+        color: '#8a909a',
+        opacity: 0.9,
+        ringlets: [
+          [41837, 1.5, 0.3], // 6
+          [42234, 2, 0.25], // 5
+          [42571, 2.5, 0.3], // 4
+          [44718, 7, 0.4], // α
+          [45661, 8, 0.35], // β
+          [47176, 1.6, 0.25], // η
+          [47627, 3.8, 0.45], // γ
+          [48300, 6.1, 0.4], // δ
+          [50024, 2, 0.1], // λ
+          [51149, 58, 1], // ε
+        ],
+      },
     },
     audio: orig('uranus', plasma),
     discovered: '1781 — William Herschel',
@@ -277,7 +296,20 @@ export const CATALOG: BodyDef[] = [
       map: 'neptune',
       color: '#4b70dd',
       atmosphere: { color: '#5c8cff', height: 0.02, density: 0.6 },
-      rings: { inner: 41900, outer: 62932, color: '#80808a', opacity: 0.1 },
+      // Voyager 2: faint dusty rings, Adams the brightest, Galle and Lassell broad sheets.
+      rings: {
+        inner: 40500,
+        outer: 63500,
+        color: '#80808a',
+        opacity: 1,
+        ringlets: [
+          [42400, 2000, 0.04], // Galle
+          [53200, 113, 0.3], // Le Verrier
+          [55200, 4000, 0.02], // Lassell
+          [57200, 100, 0.12], // Arago
+          [62932, 35, 0.5], // Adams
+        ],
+      },
     },
     audio: orig('neptune', plasma),
     discovered: '1846 — Le Verrier, Galle & d’Arrest',
@@ -379,7 +411,7 @@ export const CATALOG: BodyDef[] = [
     horizons: '502',
     physical: { radius: 1560.8, mass: 4.7998e22, rotationH: 85.23, tempK: 102, albedo: 0.67, atmosphere: 'Thin O₂' },
     tidallyLocked: true,
-    visual: { map: 'europa', color: '#c9b9a0' },
+    visual: { map: 'europa', mapLonOffset: 180, color: '#c9b9a0' },
     audio: {
       kind: 'recording',
       src: 'recordings/europa-juno.mp3',
@@ -797,7 +829,7 @@ export const CATALOG: BodyDef[] = [
     horizons: '1;',
     physical: { radius: 469.7, mass: 9.3835e20, rotationH: 9.074, tempK: 168, albedo: 0.09 },
     rotation: { ra: 291.418, dec: 66.764, w0: 170.65, wDot: 952.1532 },
-    visual: { map: 'ceres', impression: true, color: '#8a8580' },
+    visual: { map: 'ceres', mapLonOffset: 180, color: '#8a8580' },
     audio: son,
     discovered: '1801 — Giuseppe Piazzi',
     missions: ['Dawn'],
@@ -846,7 +878,7 @@ export const CATALOG: BodyDef[] = [
     horizons: '901',
     physical: { radius: 606, mass: 1.586e21, rotationH: 153.29, tempK: 53, albedo: 0.38 },
     tidallyLocked: true,
-    visual: { procedural: 'charon', color: '#a09c98', accent: '#7a4a3a' },
+    visual: { map: 'charon', procedural: 'charon', color: '#a09c98', accent: '#7a4a3a' },
     audio: son,
     discovered: '1978 — James Christy',
     missions: ['New Horizons'],
@@ -1179,7 +1211,7 @@ export const CATALOG: BodyDef[] = [
     physical: { radius: 0.245, mass: 7.329e10, rotationH: 4.296, albedo: 0.044 },
     shape: { type: 'ellipsoid', radii: [0.282, 0.27, 0.249] },
     rotation: spin(4.296),
-    visual: { procedural: 'rocky', color: '#3c3a38', accent: '#5c5854' },
+    visual: { map: 'bennu', procedural: 'rocky', color: '#3c3a38', accent: '#5c5854' },
     audio: son,
     discovered: '1999 — LINEAR',
     missions: ['OSIRIS-REx (sample returned 2023)'],
@@ -1197,7 +1229,7 @@ export const CATALOG: BodyDef[] = [
     physical: { radius: 0.448, mass: 4.5e11, rotationH: 7.63, albedo: 0.045 },
     shape: { type: 'ellipsoid', radii: [0.502, 0.502, 0.438] },
     rotation: spin(7.63),
-    visual: { procedural: 'rocky', color: '#3a3836', accent: '#58544e' },
+    visual: { map: 'ryugu', procedural: 'rocky', color: '#3a3836', accent: '#58544e' },
     audio: son,
     discovered: '1999 — LINEAR',
     missions: ['Hayabusa2 (sample returned 2020)'],

@@ -1,0 +1,75 @@
+{
+  "source": "ffmpeg ebur128: integrated loudness (LUFS) and true peak (dBTP) per clip",
+  "clips": {
+    "original/drone-dark.m4a": {
+      "lufs": -18.3,
+      "peak": -0.2,
+      "channels": 1
+    },
+    "original/drone-hum.m4a": {
+      "lufs": -12.1,
+      "peak": 0,
+      "channels": 1
+    },
+    "original/jupiter.m4a": {
+      "lufs": -25.1,
+      "peak": -9.2,
+      "channels": 2
+    },
+    "original/mars.m4a": {
+      "lufs": -22.4,
+      "peak": -2.7,
+      "channels": 2
+    },
+    "original/mercury.m4a": {
+      "lufs": -21.9,
+      "peak": -4.7,
+      "channels": 2
+    },
+    "original/neptune.m4a": {
+      "lufs": -29.1,
+      "peak": -13.3,
+      "channels": 2
+    },
+    "original/pluto.m4a": {
+      "lufs": -22.4,
+      "peak": -3.7,
+      "channels": 2
+    },
+    "original/saturn.m4a": {
+      "lufs": -16.6,
+      "peak": -4,
+      "channels": 2
+    },
+    "original/soundtrack.m4a": {
+      "lufs": -20,
+      "peak": -0.2,
+      "channels": 2
+    },
+    "original/sun-burning.m4a": {
+      "lufs": -18.3,
+      "peak": -0.5,
+      "channels": 1
+    },
+    "original/uranus.m4a": {
+      "lufs": -17.5,
+      "peak": -3.3,
+      "channels": 2
+    },
+    "original/venus.m4a": {
+      "lufs": -14.6,
+      "peak": -4.6,
+      "channels": 2
+    },
+    "recordings/europa-juno.mp3": {
+      "lufs": -17.2,
+      "peak": -0.3,
+      "channels": 1
+    },
+    "recordings/ganymede-juno.m4a": {
+      "lufs": -15.9,
+      "peak": -3.4,
+      "channels": 2
+    }
+  }
+}

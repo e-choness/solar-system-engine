@@ -4,6 +4,7 @@ import {
   dot,
   Fn,
   float,
+  fwidth,
   length,
   luminance,
   max,
@@ -66,6 +67,12 @@ const viewDir = () => normalize(cameraPosition.sub(positionWorld));
 
 /** Surface normal from the body centre: robust for both sides and displaced meshes. */
 const radial = (u: BodyUniforms) => normalize(positionWorld.sub(u.center));
+
+/**
+ * How much of the twilight tint is visible along a view ray (camera → point):
+ * none when the Sun is behind the camera, full when looking across or into it.
+ */
+const twilightView = (ray: N, L: N) => smoothstep(-0.55, 0.25, dot(ray, L));
 
 /**
  * Procedural albedo for bodies without spacecraft imagery, evaluated on the
@@ -186,12 +193,16 @@ export function planetMaterial(def: BodyDef, tex: PlanetTextures, u: BodyUniform
     const V = viewDir();
     const fres = pow(oneMinus(saturate(dot(N, V))), 3);
     const day = smoothstep(-0.2, 0.45, NdotL);
-    const band = smoothstep(-0.3, 0, NdotL).mul(smoothstep(0.35, 0, NdotL));
+    // Twilight reddening is a thin band along the terminator, seen only when the
+    // camera looks across it (at full phase the whole limb sits at NdotL ≈ 0).
+    const band = smoothstep(-0.16, 0, NdotL)
+      .mul(smoothstep(0.16, 0, NdotL))
+      .mul(twilightView(V.negate(), L));
     const sunset = color3(v.atmosphere.sunset ?? v.atmosphere.color);
     emissive = emissive.add(
       color3(v.atmosphere.color)
         .mul(fres.mul(day).mul(v.atmosphere.density * 0.9))
-        .add(sunset.mul(fres.mul(band).mul(v.atmosphere.density * 0.6))),
+        .add(sunset.mul(fres.mul(band).mul(v.atmosphere.density * 0.35))),
     );
   }
   material.emissiveNode = emissive;
@@ -224,8 +235,12 @@ export function atmosphereMaterial(def: BodyDef, u: BodyUniforms): THREE.MeshBas
     );
     const L = sunDir();
     const lit = dot(normalize(closest.sub(u.center)), L);
-    const tint = mix(color3(atm.sunset ?? atm.color), color3(atm.color), smoothstep(-0.1, 0.35, lit));
-    const light = smoothstep(-0.35, 0.2, lit);
+    // Day-side scattering color everywhere except a narrow twilight band viewed across the terminator.
+    const twilight = smoothstep(-0.12, 0, lit)
+      .mul(smoothstep(0.14, 0, lit))
+      .mul(twilightView(ray, L));
+    const tint = mix(color3(atm.color), color3(atm.sunset ?? atm.color), twilight.mul(0.85));
+    const light = smoothstep(-0.3, 0.15, lit);
     const forward = pow(saturate(dot(ray, L)), 8).mul(2.5);
     return tint
       .mul(glow)
@@ -274,8 +289,23 @@ export function ringMaterial(
   const bands = mx_fractal_noise_float(vec3(radial01.mul(60), 0, 0), 3, 2.3, 0.6)
     .mul(0.5)
     .add(0.5);
-  const albedo = sample ? sample.rgb.mul(base).mul(1.25) : base.mul(bands.mul(0.6).add(0.4));
-  const alpha = sample ? sample.a : bands.mul(smoothstep(0, 0.08, radial01)).mul(smoothstep(1, 0.92, radial01));
+  let albedo = sample ? sample.rgb.mul(base).mul(1.25) : base.mul(bands.mul(0.6).add(0.4));
+  let alpha = sample ? sample.a : bands.mul(smoothstep(0, 0.08, radial01)).mul(smoothstep(1, 0.92, radial01));
+  if (r.ringlets && !sample) {
+    // Narrow rings, most far thinner than a pixel: each draws at least a pixel
+    // wide and fades with the share of the pixel it covers (square-rooted, so
+    // the brightest stay visible as faint threads from a distance, as in long exposures).
+    const radius = length(positionLocal.xz);
+    const px = max(fwidth(radius), 1e-3);
+    alpha = r.ringlets
+      .map(([at, width, opacity]) => {
+        const half = max(px, width).mul(0.5);
+        const profile = oneMinus(smoothstep(half.sub(px.mul(0.5)), half.add(px.mul(0.5)), abs(radius.sub(at))));
+        return profile.mul(saturate(float(width).div(px)).sqrt()).mul(opacity);
+      })
+      .reduce((sum, a) => sum.add(a));
+    albedo = base;
+  }
   material.colorNode = albedo.mul(lighting);
   material.opacityNode = alpha.mul(r.opacity).mul(step(0, radial01)).mul(step(radial01, 1));
   return { material, node };

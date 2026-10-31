@@ -1,4 +1,5 @@
 import type { BodyDef } from '../data/types.ts';
+import { dbToGain, TARGET_LUFS } from './loudness.ts';
 
 /**
  * Generative "voice" for bodies that have never been recorded: the physical
@@ -19,6 +20,21 @@ export interface SonificationParams {
   cutoff: number;
   timbre: 'ice' | 'rock' | 'gas' | 'comet' | 'metal' | 'earth' | 'moon';
 }
+
+/**
+ * Loudness each timbre renders at with the gains below and a voice gain of 1
+ * (K-weighted LUFS, rendered offline by scripts/measure-voices.mjs). Voices are
+ * trimmed from these to the mixer's target so they sit level with the recordings.
+ */
+export const RENDERED_LUFS: Record<SonificationParams['timbre'], number> = {
+  ice: -13.3,
+  moon: -12.3,
+  gas: -13.3,
+  rock: -6.5,
+  comet: -13.3,
+  metal: -22.9,
+  earth: -12.5,
+};
 
 const hash = (s: string) => [...s].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261);
 
@@ -65,7 +81,7 @@ export function sonify(ctx: AudioContext, def: BodyDef, out: AudioNode, send: Au
   const now = ctx.currentTime;
   const voice = ctx.createGain();
   voice.gain.setValueAtTime(0, now);
-  voice.gain.linearRampToValueAtTime(0.9, now + 2.5);
+  voice.gain.linearRampToValueAtTime(dbToGain(TARGET_LUFS - RENDERED_LUFS[timbre]), now + 2.5);
   const filter = ctx.createBiquadFilter();
   filter.type = 'lowpass';
   filter.frequency.value = cutoff;

@@ -1,7 +1,7 @@
 import { attribute, float, fract, mix, pow, uniform } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import type { BodyKind } from '../data/types.ts';
-import { DEG, eccentricAnomaly, type Snapshot, sampleOrbit, type Vec3 } from './astro.ts';
+import { DEG, eccentricAnomaly, ellipsePoint, orbitAnomalies, orbitRotation, type Snapshot, type Vec3, wrapPi } from './astro.ts';
 import type { BodyState } from './system.ts';
 
 export const ORBIT_COLORS: Record<BodyKind, string> = {
@@ -13,22 +13,36 @@ export const ORBIT_COLORS: Record<BodyKind, string> = {
   comet: '#8fd3ff',
 };
 
-const SEGMENTS = 720;
-const BIAS_HIGH_E = 1.8;
+/** Evenly spread vertices around the whole ellipse. */
+const BASE_SEGMENTS = 512;
+/** Extra vertices packed around the body (cubic spacing, finest at the body). */
+const LOCAL_SEGMENTS = 256;
+/** Half-width of the packed window, in eccentric anomaly. */
+const WINDOW = Math.PI / 6;
+const MAX_VERTICES = BASE_SEGMENTS + LOCAL_SEGMENTS + 2;
+const TAU = Math.PI * 2;
+/** Allowed gap between a body and its drawn orbit, in screen pixels. */
+const TOLERANCE_PX = 0.25;
 
-/** Orbit-ellipse parameter (0..1) of the body's current position, matching sampleOrbit(). */
-function bodyParam(s: Snapshot): number {
-  const E = eccentricAnomaly(s.M * DEG, s.e);
-  const bias = s.e > 0.5 ? BIAS_HIGH_E : 1;
-  const t = Math.sign(E) * (Math.abs(E) / Math.PI) ** (1 / bias);
-  return (t + 1) / 2;
-}
+const angleDiff = (a: number, b: number) => Math.abs(wrapPi((a - b) * DEG)) / DEG;
 
+/**
+ * One orbit polyline. Vertices are stored relative to the body's position at
+ * sampling time (in float64, then float32), so the line is precise where the
+ * camera usually is — next to the body — even for orbits billions of km wide.
+ */
 class OrbitLine {
   readonly line: THREE.Line;
   readonly body: BodyState;
-  private readonly positions: Float32Array;
+  private readonly positions = new Float32Array(MAX_VERTICES * 3);
+  private readonly params = new Float32Array(MAX_VERTICES);
+  private readonly offsets = new Float64Array(MAX_VERTICES);
+  /** Snapshot and anomaly the vertices were sampled for. */
   private last: Snapshot | null = null;
+  private E0 = 0;
+  private scale = 1;
+  /** Body position relative to the orbit centre at E0 (km, before scaling). */
+  readonly anchor: Vec3 = [0, 0, 0];
   readonly uParam = uniform(0);
   readonly uAlpha = uniform(1);
   readonly uColor = uniform(new THREE.Color());
@@ -36,10 +50,9 @@ class OrbitLine {
   constructor(body: BodyState) {
     this.body = body;
     const geo = new THREE.BufferGeometry();
-    this.positions = new Float32Array((SEGMENTS + 1) * 3);
-    const param = new Float32Array(SEGMENTS + 1).map((_, k) => k / SEGMENTS);
-    geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
-    geo.setAttribute('param', new THREE.BufferAttribute(param, 1));
+    geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('param', new THREE.BufferAttribute(this.params, 1).setUsage(THREE.DynamicDrawUsage));
+    geo.setDrawRange(0, 0);
     const material = new THREE.LineBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     // Bright just behind the body, fading around the ellipse like a trail.
     const behind = fract(this.uParam.sub(attribute('param', 'float')));
@@ -51,30 +64,55 @@ class OrbitLine {
     this.uColor.value.set(ORBIT_COLORS[body.def.kind]);
   }
 
-  /** Re-samples the ellipse when precession has moved it noticeably. */
-  refresh(s: Snapshot) {
+  /** True when the drawn line would sit more than `tol` km from the body's true path. */
+  private stale(s: Snapshot, E: number, scale: number, tol: number) {
     const l = this.last;
-    if (
-      l &&
-      Math.abs(l.a - s.a) / s.a < 1e-4 &&
-      Math.abs(l.e - s.e) < 1e-4 &&
-      Math.abs(l.i - s.i) < 0.02 &&
-      Math.abs(l.node - s.node) < 0.05 &&
-      Math.abs(l.peri - s.peri) < 0.05
-    ) {
-      return;
-    }
+    if (!l || scale !== this.scale) return true;
+    // How far the ellipse itself has moved (secular precession of the elements).
+    const shift =
+      Math.abs(l.a - s.a) +
+      2 * s.a * Math.abs(l.e - s.e) +
+      s.a *
+        DEG *
+        (Math.abs(l.i - s.i) + (Math.abs(Math.sin(s.i * DEG)) + 2 * s.e) * angleDiff(l.node, s.node) + 2 * s.e * angleDiff(l.peri, s.peri));
+    // How coarse the polyline is where the body has drifted to, plus float32 error of the offsets.
+    const drift = Math.abs(wrapPi(E - this.E0));
+    if (drift >= WINDOW) return true;
+    const t = Math.cbrt(drift / WINDOW);
+    const step = (3 * WINDOW * t * t) / (LOCAL_SEGMENTS / 2);
+    const chord = (s.a * step * step) / 8;
+    const precision = s.a * drift * 2.4e-7;
+    return (shift + chord + precision) * scale > tol;
+  }
+
+  /** Re-samples the ellipse around the body when it has drifted or precessed past the tolerance. */
+  refresh(s: Snapshot, E: number, scale: number, tol: number) {
+    if (!this.stale(s, E, scale, tol)) return;
     this.last = { ...s };
-    const pts = sampleOrbit(s, SEGMENTS);
-    for (let k = 0; k <= SEGMENTS; k++) {
-      // ecliptic → scene
-      this.positions[k * 3] = pts[k * 3];
-      this.positions[k * 3 + 1] = pts[k * 3 + 2];
-      this.positions[k * 3 + 2] = -pts[k * 3 + 1];
+    this.E0 = E;
+    this.scale = scale;
+    const rot = orbitRotation(s);
+    const a = ellipsePoint(s, rot, E);
+    for (let k = 0; k < 3; k++) this.anchor[k] = a[k];
+    const n = orbitAnomalies(s.e, E, BASE_SEGMENTS, LOCAL_SEGMENTS, WINDOW, this.offsets);
+    for (let k = 0; k < n; k++) {
+      const d = this.offsets[k];
+      const p = ellipsePoint(s, rot, E + d);
+      // ecliptic → scene, relative to the anchor
+      this.positions[k * 3] = (p[0] - a[0]) * scale;
+      this.positions[k * 3 + 1] = (p[2] - a[2]) * scale;
+      this.positions[k * 3 + 2] = -(p[1] - a[1]) * scale;
+      this.params[k] = d / TAU;
     }
-    const attr = this.line.geometry.attributes.position as THREE.BufferAttribute;
-    attr.needsUpdate = true;
-    this.line.geometry.computeBoundingSphere();
+    const geo = this.line.geometry;
+    geo.setDrawRange(0, n);
+    geo.attributes.position.needsUpdate = true;
+    geo.attributes.param.needsUpdate = true;
+  }
+
+  /** Trail head: the body's drift since sampling, as a fraction of the orbit. */
+  setHead(E: number) {
+    this.uParam.value = wrapPi(E - this.E0) / TAU;
   }
 }
 
@@ -119,10 +157,7 @@ export class Orbits {
         continue;
       }
       const c = b.orbitCenter();
-      const dx = c[0] - view.cam[0];
-      const dy = c[1] - view.cam[1];
-      const dz = c[2] - view.cam[2];
-      const dist = Math.hypot(dx, dy, dz);
+      const dist = Math.hypot(c[0] - view.cam[0], c[1] - view.cam[1], c[2] - view.cam[2]);
       // Hide orbits that are too small on screen to be useful, or absurdly large.
       const px = (s.a / Math.max(dist, 1)) * view.pixelsPerRadian;
       const selected = b.def.id === view.selectedId || b.def.id === view.focusId;
@@ -137,11 +172,22 @@ export class Orbits {
       if (!selected && !related(b, view.focusId, focusParent)) alpha *= 1 - 0.92 * closeUp;
       o.line.visible = alpha > 0.01;
       if (!o.line.visible) continue;
-      o.refresh(s);
+
+      // A large moon and its primary both circle their barycentre: the moon's
+      // path is its relative orbit shrunk by (1 − share), and the primary's
+      // path is the barycentre's orbit shifted by its current wobble.
+      const primary = b.parent?.partner === b ? b.parent : null;
+      const scale = primary ? 1 - (primary.def.baryShare ?? 0) : 1;
+      const E = eccentricAnomaly(s.M * DEG, s.e);
+      o.refresh(s, E, scale, (Math.max(bodyDist, b.radius) / view.pixelsPerRadian) * TOLERANCE_PX);
+      o.setHead(E);
       o.uAlpha.value = alpha;
-      o.uParam.value = bodyParam(s);
       o.uColor.value.set(selected ? '#ffffff' : ORBIT_COLORS[b.def.kind]);
-      o.line.position.set(dx, dz, -dy);
+      const wobble = b.partner ? [b.pos[0] - b.bary[0], b.pos[1] - b.bary[1], b.pos[2] - b.bary[2]] : [0, 0, 0];
+      const x = c[0] + o.anchor[0] * scale + wobble[0] - view.cam[0];
+      const y = c[1] + o.anchor[1] * scale + wobble[1] - view.cam[1];
+      const z = c[2] + o.anchor[2] * scale + wobble[2] - view.cam[2];
+      o.line.position.set(x, z, -y);
     }
   }
 }

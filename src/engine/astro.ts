@@ -76,6 +76,17 @@ export const EQ_TO_GAL: Mat3 = [
   -0.0548755604, -0.8734370902, -0.4838350155, 0.4941094279, -0.44482963, 0.7469822445, -0.867666149, -0.1980763734, 0.4559837762,
 ];
 
+/**
+ * Pole of the solar system's invariable plane in ecliptic J2000 coordinates
+ * (i = 1.578690°, Ω = 107.582222°; Souami & Souchay 2012). IAU "north" for
+ * planets and their satellites is the pole on this plane's north side.
+ */
+export const INVARIABLE_POLE: Vec3 = (() => {
+  const i = 1.57869 * DEG;
+  const o = 107.582222 * DEG;
+  return [Math.sin(i) * Math.sin(o), -Math.sin(i) * Math.cos(o), Math.cos(i)];
+})();
+
 /** Ecliptic → scene (three.js, Y-up) and its inverse. */
 export const ECL_TO_SCENE: Mat3 = [1, 0, 0, 0, 0, 1, 0, -1, 0];
 export const SCENE_TO_ECL: Mat3 = transpose(ECL_TO_SCENE);
@@ -112,25 +123,7 @@ export const toSceneRotation = (m: Mat3): Mat3 => mulMM(ECL_TO_SCENE, mulMM(m, S
 
 // ───────────────────────────────────────────────────────────── Kepler
 
-/** Osculating / mean elements. Angles in degrees, a in km, rates per day. */
-export interface Elements {
-  a: number;
-  e: number;
-  i: number;
-  /** Longitude of ascending node Ω. */
-  node: number;
-  /** Argument of periapsis ω. */
-  peri: number;
-  /** Mean anomaly at epoch. */
-  M: number;
-  epoch: number;
-  /** Mean motion (deg/day). */
-  n: number;
-  nodeRate?: number;
-  /** Rate of the longitude of periapsis ϖ = Ω + ω (deg/day). */
-  periRate?: number;
-}
-
+/** Orbital elements at one instant. Angles in degrees, a in km. */
 export interface Snapshot {
   a: number;
   e: number;
@@ -142,13 +135,80 @@ export interface Snapshot {
 
 export const wrap360 = (d: number) => ((d % 360) + 360) % 360;
 
-/** Mean elements at `jd`, applying mean motion and secular precession. */
-export function elementsAt(el: Elements, jd: number): Snapshot {
-  const dt = jd - el.epoch;
-  const node = el.node + (el.nodeRate ?? 0) * dt;
-  const varpi = el.node + el.peri + (el.periRate ?? 0) * dt;
-  const lambda = el.node + el.peri + el.M + el.n * dt;
-  return { a: el.a, e: el.e, i: el.i, node, peri: varpi - node, M: wrap360(lambda - varpi) };
+/**
+ * Element series as written by scripts/fetch-ephemeris.mjs: each column is
+ * quantized and delta-coded, and λ is stored as its residual from uniform
+ * motion at the mean rate `n`.
+ */
+export interface EncodedSeries {
+  /** Mean motion (deg/day). */
+  n: number;
+  /** Quanta of t (days), a (km), e and the angles (degrees). */
+  q: [number, number, number, number];
+  t: number[];
+  a: number[];
+  e: number[];
+  i: number[];
+  node: number[];
+  varpi: number[];
+  lambda: number[];
+}
+
+/** Epochs (JD) and, per epoch, a, e, i, Ω, ϖ, λ with the angles unwrapped. */
+export interface ElementSeries {
+  /** Mean motion (deg/day): carries λ past either end of the series. */
+  n: number;
+  t: Float64Array;
+  el: Float64Array;
+}
+
+export function decodeSeries(s: EncodedSeries): ElementSeries {
+  const count = s.t.length;
+  const t = new Float64Array(count);
+  const el = new Float64Array(count * 6);
+  let tick = 0;
+  for (let k = 0; k < count; k++) {
+    tick += s.t[k];
+    t[k] = tick * s.q[0];
+  }
+  const columns = [s.a, s.e, s.i, s.node, s.varpi, s.lambda];
+  const units = [s.q[1], s.q[2], s.q[3], s.q[3], s.q[3], s.q[3]];
+  for (let c = 0; c < 6; c++) {
+    let acc = 0;
+    for (let k = 0; k < count; k++) {
+      acc += columns[c][k];
+      el[k * 6 + c] = acc * units[c];
+    }
+  }
+  for (let k = 0; k < count; k++) el[k * 6 + 5] += s.n * (t[k] - t[0]);
+  return { n: s.n, t, el };
+}
+
+/**
+ * Elements at `jd`, linearly interpolated between the series' epochs. Past
+ * either end the edge orbit is held and the body keeps its mean motion.
+ */
+export function seriesAt(s: ElementSeries, jd: number): Snapshot {
+  const { t, el } = s;
+  const last = t.length - 1;
+  let k = 0;
+  let w = 0;
+  if (jd >= t[last]) k = last;
+  else if (jd > t[0]) {
+    let hi = last;
+    while (hi - k > 1) {
+      const mid = (k + hi) >> 1;
+      if (t[mid] <= jd) k = mid;
+      else hi = mid;
+    }
+    w = (jd - t[k]) / (t[hi] - t[k]);
+  }
+  const at = (c: number) => (w ? el[k * 6 + c] + (el[(k + 1) * 6 + c] - el[k * 6 + c]) * w : el[k * 6 + c]);
+  const node = at(3);
+  const varpi = at(4);
+  const beyond = jd < t[0] ? jd - t[0] : jd > t[last] ? jd - t[last] : 0;
+  const lambda = at(5) + s.n * beyond;
+  return { a: at(0), e: at(1), i: at(2), node: wrap360(node), peri: wrap360(varpi - node), M: wrap360(lambda - varpi) };
 }
 
 /** Solves Kepler's equation M = E − e·sin E (radians). */
@@ -187,6 +247,33 @@ export function positionFromSnapshot(s: Snapshot): Vec3 {
 }
 
 /**
+ * Osculating elements from a relative state vector (km, km/day) and the
+ * system's gravitational parameter μ (km³/day²). Ellipses only.
+ */
+export function elementsFromState(r: Vec3, v: Vec3, mu: number): Snapshot {
+  const rn = length(r);
+  const h = cross(r, v);
+  const hn = length(h);
+  const vxh = cross(v, h);
+  const ev: Vec3 = [vxh[0] / mu - r[0] / rn, vxh[1] / mu - r[1] / rn, vxh[2] / mu - r[2] / rn];
+  const e = Math.min(length(ev), 0.999999);
+  const a = 1 / (2 / rn - dot(v, v) / mu);
+  const i = Math.acos(Math.max(-1, Math.min(1, h[2] / hn)));
+  // Line of nodes; for a planar orbit fall back to the x axis.
+  const nl = Math.hypot(h[0], h[1]);
+  const node = nl > 1e-12 * hn ? Math.atan2(h[0], -h[1]) : 0;
+  const nx: Vec3 = [Math.cos(node), Math.sin(node), 0];
+  const ny = cross(normalize(h), nx);
+  // Argument of latitude of the body and of periapsis, measured in the orbit plane.
+  const u = Math.atan2(dot(r, ny), dot(r, nx));
+  const peri = e > 1e-10 ? Math.atan2(dot(ev, ny), dot(ev, nx)) : 0;
+  const nu = u - peri;
+  const E = 2 * Math.atan2(Math.sqrt(1 - e) * Math.sin(nu / 2), Math.sqrt(1 + e) * Math.cos(nu / 2));
+  const M = E - e * Math.sin(E);
+  return { a, e, i: i / DEG, node: wrap360(node / DEG), peri: wrap360(peri / DEG), M: wrap360(M / DEG) };
+}
+
+/**
  * Samples a closed orbit ellipse relative to its central body, denser near
  * periapsis so very eccentric comet orbits stay smooth. Returns ecliptic km.
  */
@@ -204,5 +291,35 @@ export function sampleOrbit(s: Snapshot, segments: number): Float64Array {
   return out;
 }
 
-/** Orbital period in days from mean motion. */
-export const periodDays = (el: Elements) => 360 / Math.abs(el.n);
+const TAU = Math.PI * 2;
+/** Wraps an angle (radians) into [−π, π). */
+export const wrapPi = (x: number) => x - TAU * Math.floor((x + Math.PI) / TAU);
+
+/**
+ * Eccentric-anomaly offsets for drawing an orbit around a body at anomaly `E0`:
+ * an even base spacing (denser near periapsis for eccentric orbits) plus a
+ * cluster packed ever tighter toward the body, so the polyline hugs the true
+ * path at any zoom. Returns ascending offsets from −π to π, the last point
+ * closing the loop; the body itself sits exactly on a vertex (offset 0).
+ */
+export function orbitAnomalies(e: number, E0: number, base: number, local: number, window: number, out: Float64Array): number {
+  const bias = e > 0.5 ? 1.8 : 1;
+  let n = 0;
+  for (let k = 0; k < base; k++) {
+    const t = (k / base) * 2 - 1;
+    const d = wrapPi(Math.PI * Math.sign(t) * Math.abs(t) ** bias - E0);
+    if (Math.abs(d) >= window) out[n++] = d;
+  }
+  for (let k = 0; k <= local; k++) {
+    const t = (k / local) * 2 - 1;
+    out[n++] = window * t * t * t;
+  }
+  out.subarray(0, n).sort();
+  out[n] = out[0] + TAU;
+  return n + 1;
+}
+
+/** Position on the orbit ellipse at eccentric anomaly E, given orbitRotation(s). */
+export function ellipsePoint(s: Snapshot, rot: Mat3, E: number): Vec3 {
+  return mulMV(rot, [s.a * (Math.cos(E) - s.e), s.a * Math.sqrt(1 - s.e * s.e) * Math.sin(E), 0]);
+}

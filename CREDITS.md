@@ -34,12 +34,12 @@ Solar System stands on the work of spacecraft teams, mappers, astronomers and op
 | Haumea _(artist’s impression)_ | [4k_haumea_fictional.jpg](https://www.solarsystemscope.com/textures/) | Solar System Scope (INOVE) | CC BY 4.0 |
 | Makemake _(artist’s impression)_ | [4k_makemake_fictional.jpg](https://www.solarsystemscope.com/textures/) | Solar System Scope (INOVE) | CC BY 4.0 |
 | Milky Way | [8k_stars_milky_way.jpg](https://www.solarsystemscope.com/textures/) | Solar System Scope (INOVE) | CC BY 4.0 |
-| Ceres _(artist’s impression)_ | [4k_ceres_fictional.jpg](https://www.solarsystemscope.com/textures/) | Solar System Scope (INOVE) | CC BY 4.0 |
+| Ceres | [Ceres Dawn FC global mosaic (DLR, 20 px/°)](https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Ceres_Dawn_FC_DLR_global_20ppd_Oct2015.tif) | NASA/JPL-Caltech/UCLA/MPS/DLR/IDA, USGS Astrogeology | Public domain |
 | Vesta | [Vesta map for GeoHack.png](https://commons.wikimedia.org/wiki/File:Vesta_map_for_GeoHack.png) | NASA/JPL-Caltech/UCLA/MPS/DLR/IDA | Public domain |
 | Phobos | [Phobos map by Askaniy.png](https://commons.wikimedia.org/wiki/File:Phobos_map_by_Askaniy.png) | Askaniy Anpilogov, Phil Stooke | CC BY-SA 3.0 |
 | Deimos | [Deimos map by Askaniy.png](https://commons.wikimedia.org/wiki/File:Deimos_map_by_Askaniy.png) | Askaniy Anpilogov, John van Vliet | CC BY-SA 3.0 |
-| Io | [Io modest scale map Io SSI-only color SIMP0 med.cub.jpg](https://commons.wikimedia.org/wiki/File:Io_modest_scale_map_Io_SSI-only_color_SIMP0_med.cub.jpg) | USGS Astrogeology Science Center | Public domain |
-| Europa | [Europa Voyager GalileoSSI global mosaic.jpg](https://commons.wikimedia.org/wiki/File:Europa_Voyager_GalileoSSI_global_mosaic.jpg) | U.S. Geological Survey / Planetary Data System / Tammy Becker | Public domain |
+| Io | [Io Galileo SSI–Voyager global color mosaic (1 km/px)](https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Io_GalileoSSI-Voyager_Global_Mosaic_ClrMerge_1km.tif) | NASA/JPL, USGS Astrogeology | Public domain |
+| Europa | [Moon Europa color map.jpg](https://commons.wikimedia.org/wiki/File:Moon_Europa_color_map.jpg) | Seek9750 | CC0 |
 | Ganymede | [Ganymede map by Askaniy.png](https://commons.wikimedia.org/wiki/File:Ganymede_map_by_Askaniy.png) | Askaniy Anpilogov, USGS, Björn Jónsson, NASA/JPL-Caltech/SwRI/MSSS/Brian Swift | CC BY-SA 3.0 |
 | Callisto | [Callisto map by Askaniy.png](https://commons.wikimedia.org/wiki/File:Callisto_map_by_Askaniy.png) | Askaniy Anpilogov, John van Vliet | CC BY-SA 3.0 |
 | Mimas | [Map of Mimas colorized 2014-04 PIA18437.jpg](https://commons.wikimedia.org/wiki/File:Map_of_Mimas_colorized_2014-04_PIA18437.jpg) | NASA/JPL-Caltech/Space Science Institute/Lunar and Planetary Institute | Public domain |
@@ -56,6 +56,9 @@ Solar System stands on the work of spacecraft teams, mappers, astronomers and op
 | Oberon | [Oberon map JPL USGS.jpg](https://commons.wikimedia.org/wiki/File:Oberon_map_JPL_USGS.jpg) | Caltech/JPL/USGS | Public domain |
 | Triton | [Triton Map.jpg](https://commons.wikimedia.org/wiki/File:Triton_Map.jpg) | NASA/JPL-Caltech/Lunar &amp; Planetary Institute | Public domain |
 | Pluto | [Pluto color mapmosaic.jpg](https://commons.wikimedia.org/wiki/File:Pluto_color_mapmosaic.jpg) | NASA / Johns Hopkins University Applied Physics Laboratory / Southwest Research Institute | Public domain |
+| Charon | [Charon map iau1803c.jpg](https://commons.wikimedia.org/wiki/File:Charon_map_iau1803c.jpg) | NASA/Johns Hopkins University Applied Physics Laboratory/Southwest Research Institute | Public domain |
+| Bennu | [Bennu map by Askaniy (albedo).png](https://commons.wikimedia.org/wiki/File:Bennu_map_by_Askaniy_(albedo).png) | Askaniy Anpilogov, USGS | CC BY-SA 3.0 |
+| Ryugu | [Ryugu albedo map by Askaniy (enhanced).png](https://commons.wikimedia.org/wiki/File:Ryugu_albedo_map_by_Askaniy_(enhanced).png) | Askaniy Anpilogov, Yokota et al. | CC BY-SA 3.0 |
 
 Maps are resized to 2:1 equirectangular frames and re-encoded as WebP; CC BY-SA 3.0 derivatives stay under CC BY-SA 3.0.
 

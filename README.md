@@ -28,7 +28,7 @@ It is a ground-up remake of the [original 2021 Unity game](https://echoness.itch
 | | |
 | --- | --- |
 | 🪐 **Worlds** | 69: the Sun, 8 planets, 31 moons, 9 dwarf planets, 12 asteroids & Kuiper belt objects, 8 comets |
-| 🛰️ **Surface maps** | 31 from spacecraft imagery, 4 artist’s impressions, procedural GPU surfaces for the rest |
+| 🛰️ **Surface maps** | 35 from spacecraft imagery, 3 artist’s impressions, procedural GPU surfaces for the rest |
 | 🎧 **Sound** | original soundtrack, 9 original world sounds, 2 spacecraft recordings, 58 live sonifications |
 | ✨ **Sky** | 8,355 real stars from the Yale Bright Star Catalogue, the Milky Way, asteroid belt, Trojans, Kuiper belt and Oort cloud |
 | 🕰️ **Time** | any moment from 1800 to 2200, 21 one-click historic and upcoming events |
@@ -115,7 +115,7 @@ It is a ground-up remake of the [original 2021 Unity game](https://echoness.itch
 
 | Name | Type | Radius | Surface | Sound |
 | --- | --- | ---: | --- | --- |
-| [Ceres](https://en.wikipedia.org/wiki/Ceres_(dwarf_planet)) | Dwarf planet · asteroid belt | 470 km | 🎨 impression | 🎛️ sonified |
+| [Ceres](https://en.wikipedia.org/wiki/Ceres_(dwarf_planet)) | Dwarf planet · asteroid belt | 470 km | 📷 spacecraft | 🎛️ sonified |
 | [Pluto](https://en.wikipedia.org/wiki/Pluto) | Dwarf planet · Kuiper Belt | 1,188 km | 📷 spacecraft | 🎵 original |
 | [Eris](https://en.wikipedia.org/wiki/Eris_(dwarf_planet)) | Dwarf planet · scattered disc | 1,163 km | 🎨 impression | 🎛️ sonified |
 | [Haumea](https://en.wikipedia.org/wiki/Haumea) | Dwarf planet · Kuiper Belt | 780 km | 🎨 impression | 🎛️ sonified |
@@ -158,7 +158,7 @@ It is a ground-up remake of the [original 2021 Unity game](https://echoness.itch
 | [Triton](https://en.wikipedia.org/wiki/Triton_(moon)) | Major moon of Neptune · Neptune | 1,353 km | 📷 spacecraft | 🎛️ sonified |
 | [Proteus](https://en.wikipedia.org/wiki/Proteus_(moon)) | Inner moon of Neptune · Neptune | 210 km | ✨ procedural | 🎛️ sonified |
 | [Nereid](https://en.wikipedia.org/wiki/Nereid_(moon)) | Irregular moon of Neptune · Neptune | 170 km | ✨ procedural | 🎛️ sonified |
-| [Charon](https://en.wikipedia.org/wiki/Charon_(moon)) | Moon of Pluto · Pluto | 606 km | ✨ procedural | 🎛️ sonified |
+| [Charon](https://en.wikipedia.org/wiki/Charon_(moon)) | Moon of Pluto · Pluto | 606 km | 📷 spacecraft | 🎛️ sonified |
 | [Nix](https://en.wikipedia.org/wiki/Nix_(moon)) | Moon of Pluto · Pluto | 19 km | ✨ procedural | 🎛️ sonified |
 | [Hydra](https://en.wikipedia.org/wiki/Hydra_(moon)) | Moon of Pluto · Pluto | 19 km | ✨ procedural | 🎛️ sonified |
 | [Dysnomia](https://en.wikipedia.org/wiki/Dysnomia_(moon)) | Moon of Eris · Eris | 308 km | ✨ procedural | 🎛️ sonified |
@@ -176,8 +176,8 @@ It is a ground-up remake of the [original 2021 Unity game](https://echoness.itch
 | [Juno](https://en.wikipedia.org/wiki/3_Juno) | Asteroid belt | 127 km | ✨ procedural | 🎛️ sonified |
 | [Psyche](https://en.wikipedia.org/wiki/16_Psyche) | Metal-rich asteroid | 111 km | ✨ procedural | 🎛️ sonified |
 | [Eros](https://en.wikipedia.org/wiki/433_Eros) | Near-Earth asteroid | 8.42 km | ✨ procedural | 🎛️ sonified |
-| [Bennu](https://en.wikipedia.org/wiki/101955_Bennu) | Near-Earth asteroid | 0.245 km | ✨ procedural | 🎛️ sonified |
-| [Ryugu](https://en.wikipedia.org/wiki/162173_Ryugu) | Near-Earth asteroid | 0.448 km | ✨ procedural | 🎛️ sonified |
+| [Bennu](https://en.wikipedia.org/wiki/101955_Bennu) | Near-Earth asteroid | 0.245 km | 📷 spacecraft | 🎛️ sonified |
+| [Ryugu](https://en.wikipedia.org/wiki/162173_Ryugu) | Near-Earth asteroid | 0.448 km | 📷 spacecraft | 🎛️ sonified |
 | [Itokawa](https://en.wikipedia.org/wiki/25143_Itokawa) | Near-Earth asteroid | 0.165 km | ✨ procedural | 🎛️ sonified |
 | [Apophis](https://en.wikipedia.org/wiki/99942_Apophis) | Near-Earth asteroid | 0.17 km | ✨ procedural | 🎛️ sonified |
 | [Didymos](https://en.wikipedia.org/wiki/65803_Didymos) | Binary near-Earth asteroid | 0.39 km | ✨ procedural | 🎛️ sonified |
@@ -267,7 +267,7 @@ Everything in [`media/`](media) is generated from the live app by `npm run media
 ## Credits
 
 <!-- auto:credits -->
-- **Surface maps:** 41 maps from Solar System Scope (CC BY 4.0), NASA/JPL/USGS (public domain) and Askaniy (CC BY-SA 3.0).
+- **Surface maps:** 44 maps from Solar System Scope (CC BY 4.0), NASA/JPL/USGS (public domain) and Askaniy (CC BY-SA 3.0).
 - **Recordings:** 2 NASA Juno Waves recordings (NASA/JPL-Caltech/SwRI/University of Iowa).
 - **Data:** JPL Horizons and Standish planetary elements (NASA/JPL), IAU WGCCRE rotation models, Yale Bright Star Catalogue (via CDS VizieR).
 - **Original music and sounds:** _Solar System_ (2021) by Echo Yin.
@@ -280,5 +280,5 @@ Every file and its license is listed in **[CREDITS.md](CREDITS.md)**.
 Non-commercial. Source code is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). Music and sounds from the original game are © Echo Yin. Third-party maps, recordings and data keep their own licenses: see [LICENSE.md](LICENSE.md) and [CREDITS.md](CREDITS.md).
 
 <!-- auto:updated -->
-<sub>Generated by `npm run readme` · v2.0.0 · 2026-10-30</sub>
+<sub>Generated by `npm run readme` · v2.0.0 · 2026-10-31</sub>
 <!-- /auto:updated -->

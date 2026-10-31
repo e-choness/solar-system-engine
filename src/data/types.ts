@@ -35,6 +35,11 @@ export interface Rings {
   inner: number;
   outer: number;
   texture?: string;
+  /**
+   * Individual rings as [radius, width (km), relative opacity]. Without a
+   * texture or ringlets the annulus is filled with procedural banding.
+   */
+  ringlets?: [number, number, number][];
   color: string;
   opacity: number;
 }
