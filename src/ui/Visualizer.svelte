@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { MOBILE } from '../engine/device.ts';
   import { audio } from './state.svelte.ts';
 
   let { active, color }: { active: boolean; color: string } = $props();
@@ -12,7 +13,7 @@
     let energy = 0;
     const draw = () => {
       raf = requestAnimationFrame(draw);
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = MOBILE ? Math.min(window.devicePixelRatio || 1, 2) : window.devicePixelRatio || 1;
       const w = canvas.clientWidth * dpr;
       const h = canvas.clientHeight * dpr;
       if (canvas.width !== w || canvas.height !== h) {
@@ -45,7 +46,8 @@
       ctx.lineWidth = 1.6 * dpr;
       ctx.strokeStyle = 'white';
       ctx.shadowColor = color;
-      ctx.shadowBlur = 10 * dpr * (0.4 + energy);
+      // Canvas shadows are drawn on the CPU every frame: phones skip the glow.
+      ctx.shadowBlur = MOBILE ? 0 : 10 * dpr * (0.4 + energy);
       ctx.beginPath();
       for (let i = 0; i < wave.length; i += 4) {
         const x = (i / (wave.length - 1)) * w;

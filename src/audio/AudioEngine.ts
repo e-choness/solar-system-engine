@@ -31,6 +31,7 @@ export class AudioEngine {
   private readonly buffers = new Map<string, Promise<AudioBuffer>>();
   private current: { id: string; voice: Voice } | null = null;
   private settings: Settings;
+  private backgrounded = false;
   playingId: string | null = null;
 
   constructor(settings: Settings) {
@@ -42,6 +43,8 @@ export class AudioEngine {
     if (this.ctx) return;
     const ctx = new AudioContext({ latencyHint: 'playback' });
     this.ctx = ctx;
+    // iOS can create the context suspended even inside a gesture.
+    void ctx.resume();
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -16;
     comp.ratio.value = 3;
@@ -91,6 +94,25 @@ export class AudioEngine {
     this.deepLayer.gain.value = 0;
     this.deepLayer.connect(this.ambience);
     this.loop('original/drone-dark.m4a', this.deepLayer);
+  }
+
+  /** Mobile: the soundtrack shouldn't carry on from a pocket after the player switches away. */
+  setBackgrounded(hidden: boolean) {
+    if (!this.ctx) return;
+    this.backgrounded = hidden;
+    if (hidden) {
+      this.musicEl?.pause();
+      void this.ctx.suspend();
+    } else {
+      this.wake();
+    }
+  }
+
+  /** Restarts audio that the OS stopped (a call, an app switch); iOS only allows this from a gesture. */
+  wake() {
+    if (!this.ctx || this.backgrounded) return;
+    if (this.ctx.state !== 'running') this.ctx.resume().catch(() => undefined);
+    if (this.musicEl?.paused) this.musicEl.play().catch(() => undefined);
   }
 
   applySettings(s: Settings) {

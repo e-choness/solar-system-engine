@@ -1,4 +1,5 @@
 import { AudioEngine } from '../audio/AudioEngine.ts';
+import { MOBILE } from '../engine/device.ts';
 import { Engine, type Telemetry } from '../engine/Engine.ts';
 import { loadSettings, type Settings, saveSettings } from '../engine/settings.ts';
 
@@ -11,6 +12,8 @@ export interface Toast {
 }
 
 const initialSettings = loadSettings();
+/** The same breakpoint as the compact rules in global.css. */
+const compactQuery = window.matchMedia('(max-width: 760px), (max-height: 520px)');
 
 /** Global reactive UI state (Svelte 5 runes). */
 export const app = $state({
@@ -23,7 +26,11 @@ export const app = $state({
   telemetry: null as Telemetry | null,
   selectedId: null as string | null,
   hoveredId: null as string | null,
-  browserOpen: true,
+  /** Small viewport: panels become sheets and only one shows at a time. */
+  compact: compactQuery.matches,
+  /** The GPU context is gone and the page needs a reload. */
+  lost: false,
+  browserOpen: !MOBILE && !compactQuery.matches,
   settingsOpen: false,
   helpOpen: false,
   creditsOpen: false,
@@ -32,9 +39,16 @@ export const app = $state({
   toasts: [] as Toast[],
 });
 
+compactQuery.addEventListener('change', (e) => (app.compact = e.matches));
+
 /** Non-reactive singletons shared across components. */
 export const engine = new Engine();
 export const audio = new AudioEngine(initialSettings);
+
+/** Clears the sheets that share the bottom of a small screen. */
+export function closeSheets() {
+  app.browserOpen = app.settingsOpen = app.eventsOpen = false;
+}
 
 let toastId = 0;
 export function toast(text: string, tone: Toast['tone'] = 'info', ms = 4200) {

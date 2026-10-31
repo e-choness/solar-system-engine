@@ -19,6 +19,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
+    "smoke:mobile": "node scripts/smoke-mobile.mjs",
     "assets": "node scripts/fetch-assets.mjs",
     "ephemeris": "node scripts/fetch-ephemeris.mjs",
     "loudness": "node scripts/measure-loudness.mjs",

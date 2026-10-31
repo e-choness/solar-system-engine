@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { AudioLines, Crosshair, ExternalLink, Pause, Play, Sparkles, X } from '@lucide/svelte';
+  import { AudioLines, ChevronDown, ChevronUp, Crosshair, ExternalLink, Pause, Play, Sparkles, X } from '@lucide/svelte';
   import { BODY_BY_ID } from '../data/catalog.ts';
   import credits from '../data/generated/credits.json' with { type: 'json' };
   import { bodyStats, distance, duration, KIND_LABEL, mass, sig, temperature } from './format.ts';
+  import Grab from './Grab.svelte';
   import { app, audio, engine } from './state.svelte.ts';
   import Visualizer from './Visualizer.svelte';
 
@@ -15,6 +16,13 @@
   const focused = $derived(app.telemetry?.focusId === id);
   const texCredit = $derived(def.visual.map ? (credits.textures as Record<string, { author: string; license: string; url: string }>)[def.visual.map] : null);
   let playing = $state(false);
+  /** Small screens open a short card, so the world stays in view; the full details are one swipe up. */
+  let expanded = $state(false);
+
+  $effect.pre(() => {
+    void id;
+    expanded = false;
+  });
 
   $effect(() => {
     // Track the shared audio engine (it can switch voices when selection changes).
@@ -50,8 +58,16 @@
   const lightMin = $derived(live ? live.sunDistanceKm / 299792.458 / 60 : 0);
 </script>
 
-<aside class="info glass" aria-label="{def.name} details">
+<aside class="info glass sheet" class:expanded aria-label="{def.name} details">
   <div class="hero" style:--c={def.visual.color}>
+    {#if app.compact}
+      <Grab
+        label={expanded ? 'Show less' : 'Show more'}
+        onup={() => (expanded = true)}
+        ondown={() => (expanded ? (expanded = false) : engine.select(null))}
+        ontap={() => (expanded = !expanded)}
+      />
+    {/if}
     <div class="orb"></div>
     <button class="icon-btn close" aria-label="Close" onclick={() => engine.select(null)}><X size={16} /></button>
     <div class="chips">
@@ -67,12 +83,18 @@
         <span class="here"><Sparkles size={14} /> You are here</span>
       {/if}
       <button class="pill-btn" onclick={toggleSound} aria-pressed={playing}>
-        {#if playing}<Pause size={15} /> Pause sound{:else}<Play size={15} /> Listen{/if}
+        {#if playing}<Pause size={15} /> {app.compact ? 'Pause' : 'Pause sound'}{:else}<Play size={15} /> Listen{/if}
       </button>
       <a class="icon-btn" href={def.wiki} target="_blank" rel="noopener" title="Read more on Wikipedia" aria-label="Wikipedia"><ExternalLink size={16} /></a>
+      {#if app.compact}
+        <button class="icon-btn more" aria-label={expanded ? 'Show less' : 'Show more'} aria-expanded={expanded} onclick={() => (expanded = !expanded)}>
+          {#if expanded}<ChevronDown size={18} />{:else}<ChevronUp size={18} />{/if}
+        </button>
+      {/if}
     </div>
   </div>
 
+  {#if !app.compact || expanded}
   <div class="body scroll">
     {#if live}
       <div class="live">
@@ -154,6 +176,7 @@
       </p>
     {/if}
   </div>
+  {/if}
 </aside>
 
 <style>
@@ -387,14 +410,56 @@
     margin: 0;
     line-height: 1.5;
   }
-  @media (max-width: 760px) {
-    .info {
-      top: auto;
-      left: 10px;
-      right: 10px;
-      width: auto;
-      height: 52vh;
-      bottom: 120px;
+  @media (max-width: 760px), (max-height: 520px) {
+    .info.expanded {
+      height: 72vh;
+      height: 72dvh;
+    }
+    .hero {
+      flex: none;
+      padding: 0 16px 12px;
+    }
+    .orb {
+      width: 150px;
+      height: 150px;
+      top: -46px;
+    }
+    .chips {
+      display: none;
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 23px;
+      padding-right: 40px;
+    }
+    .close {
+      top: 12px;
+      right: 8px;
+      width: 40px;
+      height: 40px;
+    }
+    .actions {
+      gap: 4px;
+      margin-top: 10px;
+    }
+    .actions .pill-btn {
+      padding: 8px 12px;
+    }
+    .here {
+      padding: 0 4px;
+      white-space: nowrap;
+    }
+    .more {
+      margin-left: auto;
+    }
+    .body {
+      min-height: 0;
+      padding: 12px 16px 16px;
+    }
+  }
+  @media (max-height: 520px) and (orientation: landscape) {
+    .hero {
+      padding-top: 12px;
     }
   }
 </style>

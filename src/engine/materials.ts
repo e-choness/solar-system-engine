@@ -29,8 +29,15 @@ import {
 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import type { BodyDef, Procedural } from '../data/types.ts';
+import { MOBILE } from './device.ts';
 
 type N = any; // TSL nodes are dynamically typed.
+
+/**
+ * Phone GPUs get cheaper fragment shaders: fewer noise octaves and at most one
+ * Worley layer. A planet can fill the screen, and every noise call is per pixel.
+ */
+const LITE = MOBILE;
 
 /** Scene-wide uniforms shared by every material. */
 export const SHARED = {
@@ -82,10 +89,14 @@ export function proceduralAlbedo(kind: Procedural, base: string, accent: string,
   const p = normalize(positionLocal).add(vec3(seed * 1.37, seed * 0.71, seed * 2.03));
   const b = color3(base);
   const a = color3(accent);
-  const broad = mx_fractal_noise_float(p.mul(1.8), 5, 2.1, 0.55).mul(0.5).add(0.5);
-  const fine = mx_fractal_noise_float(p.mul(14), 3, 2.0, 0.5).mul(0.5).add(0.5);
-  const cells = mx_worley_noise_float(p.mul(5.5));
-  const small = mx_worley_noise_float(p.mul(17));
+  const broad = mx_fractal_noise_float(p.mul(1.8), LITE ? 3 : 5, 2.1, 0.55)
+    .mul(0.5)
+    .add(0.5);
+  const fine = mx_fractal_noise_float(p.mul(14), LITE ? 2 : 3, 2.0, 0.5)
+    .mul(0.5)
+    .add(0.5);
+  const cells = mx_worley_noise_float(p.mul(LITE ? 9 : 5.5));
+  const small = LITE ? cells : mx_worley_noise_float(p.mul(17));
   // Craters: dark floors, bright rims.
   const crater = (w: N, k: number) =>
     mix(float(1 - 0.45 * k), float(1), smoothstep(0.08, 0.32, w)).add(
@@ -145,7 +156,8 @@ export function planetMaterial(def: BodyDef, tex: PlanetTextures, u: BodyUniform
   const N = radial(u);
   const NdotL = dot(N, L);
 
-  const fallback = proceduralAlbedo(v.procedural ?? 'icy', v.color, v.accent ?? v.color, seed);
+  // A mapped world only shows this through unimaged gaps, not worth the noise on a phone.
+  const fallback = LITE && tex.map ? color3(v.color) : proceduralAlbedo(v.procedural ?? 'icy', v.color, v.accent ?? v.color, seed);
   let albedo: N;
   if (tex.map) {
     nodes.map = texture(tex.map);
@@ -316,17 +328,21 @@ export function sunMaterial(map: THREE.Texture, u: BodyUniforms): { material: TH
   const node = texture(map);
   const material = new THREE.MeshBasicNodeMaterial();
   const p = normalize(positionLocal);
-  const gran = mx_fractal_noise_float(p.mul(9).add(vec3(time.mul(0.015), time.mul(-0.01), time.mul(0.012))), 4, 2.3, 0.55)
+  const gran = mx_fractal_noise_float(p.mul(9).add(vec3(time.mul(0.015), time.mul(-0.01), time.mul(0.012))), LITE ? 2 : 4, 2.3, 0.55)
     .mul(0.5)
     .add(0.5);
-  const cells = mx_worley_noise_float(p.mul(42).add(vec3(time.mul(0.02))));
+  const cells = LITE
+    ? float(0.97)
+    : smoothstep(0, 0.6, mx_worley_noise_float(p.mul(42).add(vec3(time.mul(0.02)))))
+        .mul(0.25)
+        .add(0.8);
   const mu = saturate(dot(radial(u), viewDir()));
   const limb = pow(mu, 0.5).mul(0.75).add(0.25);
   const hot = vec3(1.0, 0.62, 0.22);
   const surface = node.rgb
     .mul(1.1)
     .add(hot.mul(gran.mul(0.55)))
-    .mul(smoothstep(0, 0.6, cells).mul(0.25).add(0.8));
+    .mul(cells);
   material.colorNode = surface.mul(limb).mul(SHARED.sunGain);
   return { material, node };
 }
@@ -336,7 +352,7 @@ export function coronaMaterial(): THREE.SpriteNodeMaterial {
   const material = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   const d = length(uv().sub(0.5)).mul(2);
   const angle = uv().sub(0.5);
-  const streamers = mx_fractal_noise_float(vec3(angle.x.mul(3), angle.y.mul(3), time.mul(0.03)), 3, 2, 0.5)
+  const streamers = mx_fractal_noise_float(vec3(angle.x.mul(3), angle.y.mul(3), time.mul(0.03)), LITE ? 2 : 3, 2, 0.5)
     .mul(0.5)
     .add(0.5);
   const inner = pow(saturate(oneMinus(d)), 6).mul(3);

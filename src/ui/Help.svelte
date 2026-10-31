@@ -1,7 +1,16 @@
 <script lang="ts">
-  import { Keyboard, Mouse, X } from '@lucide/svelte';
+  import { Hand, Keyboard, Mouse, X } from '@lucide/svelte';
+  import { MOBILE } from '../engine/device.ts';
   import { app } from './state.svelte.ts';
 
+  const touch: Array<[string, string]> = [
+    ['Drag', 'Orbit around the focused world'],
+    ['Pinch', 'Zoom in and out — all the way to the Oort cloud'],
+    ['Tap', 'Select a world and show its details'],
+    ['Double-tap', 'Fly to a world'],
+    ['Swipe up', 'Open the full details of the selected world'],
+    ['Swipe down', 'Close a panel'],
+  ];
   const mouse: Array<[string, string]> = [
     ['Drag', 'Orbit around the focused world'],
     ['Scroll / pinch', 'Zoom in and out — all the way to the Oort cloud'],
@@ -33,6 +42,15 @@
     <h2>Controls</h2>
     <button class="icon-btn" aria-label="Close" onclick={() => (app.helpOpen = false)}><X size={16} /></button>
   </header>
+  {#if MOBILE}
+    <h3><Hand size={13} /> Touch</h3>
+    <dl>
+      {#each touch as [k, v] (k)}
+        <dt>{k}</dt>
+        <dd>{v}</dd>
+      {/each}
+    </dl>
+  {:else}
   <div class="cols">
     <div>
       <h3><Mouse size={13} /> Mouse & touch</h3>
@@ -53,6 +71,7 @@
       </dl>
     </div>
   </div>
+  {/if}
   <p class="tip">
     Everything is at true scale: distances, sizes and positions are real. Planets look like points until you get close — that’s how empty space is.
   </p>
@@ -76,8 +95,9 @@
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: min(760px, calc(100vw - 28px));
+    width: min(760px, calc(100vw - 28px - var(--safe-l) - var(--safe-r)));
     max-height: calc(100vh - 40px);
+    max-height: calc(100dvh - 40px - var(--safe-t) - var(--safe-b));
     overflow: auto;
     padding: 18px 22px 20px;
     z-index: 40;

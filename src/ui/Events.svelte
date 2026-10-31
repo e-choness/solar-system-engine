@@ -2,6 +2,7 @@
   import { CalendarClock, X } from '@lucide/svelte';
   import { BODY_BY_ID } from '../data/catalog.ts';
   import { jdFromDate } from '../engine/astro.ts';
+  import Grab from './Grab.svelte';
   import { app, audio, engine, toast } from './state.svelte.ts';
 
   interface SkyEvent {
@@ -75,7 +76,8 @@
   </ul>
 {/snippet}
 
-<section class="panel glass" aria-label="Time travel">
+<section class="panel glass sheet" aria-label="Time travel">
+  {#if app.compact}<Grab label="Close" ondown={() => (app.eventsOpen = false)} ontap={() => (app.eventsOpen = false)} />{/if}
   <header>
     <h2><CalendarClock size={17} /> Time travel</h2>
     <button class="icon-btn" aria-label="Close" onclick={() => (app.eventsOpen = false)}><X size={16} /></button>
@@ -187,5 +189,10 @@
     font-size: 11px;
     line-height: 1.5;
     color: var(--text-faint);
+  }
+  @media (max-width: 760px), (max-height: 520px) {
+    header {
+      padding-top: 0;
+    }
   }
 </style>
