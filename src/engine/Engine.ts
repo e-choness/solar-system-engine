@@ -391,7 +391,8 @@ export class Engine {
       if (pointers.size === 0) multi = false;
       touched = e.pointerType === 'touch';
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      downAt = { x: e.clientX, y: e.clientY, t: performance.now() };
+      // Event time, not handler time: a slow frame must not turn a quick tap into a long press.
+      downAt = { x: e.clientX, y: e.clientY, t: e.timeStamp };
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
         pinch = Math.hypot(a.x - b.x, a.y - b.y);
@@ -421,14 +422,13 @@ export class Engine {
       pointers.delete(e.pointerId);
       if (pointers.size < 2) pinch = 0;
       const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
-      if (e.type === 'pointerup' && !multi && moved < (touched ? 12 : 6) && performance.now() - downAt.t < 450) {
+      if (e.type === 'pointerup' && !multi && moved < (touched ? 12 : 6) && e.timeStamp - downAt.t < 450) {
         const id = this.pick(e.clientX, e.clientY, touched);
         this.select(id);
         this.emit('tap', id);
         if (touched) {
-          const now = performance.now();
-          const twice = now - lastTap.t < DOUBLE_TAP_MS && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX;
-          lastTap = { x: e.clientX, y: e.clientY, t: twice ? 0 : now };
+          const twice = e.timeStamp - lastTap.t < DOUBLE_TAP_MS && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX;
+          lastTap = { x: e.clientX, y: e.clientY, t: twice ? 0 : e.timeStamp };
           if (twice && id) this.focus(id);
         }
       }

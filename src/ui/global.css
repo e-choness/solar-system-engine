@@ -305,7 +305,8 @@ button {
   html,
   body {
     overscroll-behavior: none;
-    touch-action: manipulation;
+    /* Not `manipulation`, which still lets a pinch on a panel zoom the page and leave it zoomed. */
+    touch-action: pan-x pan-y;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
   }
@@ -358,7 +359,7 @@ button {
 }
 
 /* ───────────── small screens: panels become sheets docked above the time bar */
-@media (max-width: 760px), (max-height: 520px) {
+@media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 900px) {
   html .sheet.glass {
     top: auto;
     left: calc(8px + var(--safe-l));

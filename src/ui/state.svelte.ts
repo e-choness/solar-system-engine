@@ -13,7 +13,7 @@ export interface Toast {
 
 const initialSettings = loadSettings();
 /** The same breakpoint as the compact rules in global.css. */
-const compactQuery = window.matchMedia('(max-width: 760px), (max-height: 520px)');
+const compactQuery = window.matchMedia('(max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 900px)');
 
 /** Global reactive UI state (Svelte 5 runes). */
 export const app = $state({

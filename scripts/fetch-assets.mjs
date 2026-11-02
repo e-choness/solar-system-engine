@@ -29,23 +29,30 @@ const USGS = 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/';
  * variant that loads first, and maps wider than MID_SIZE a `.mid` variant for
  * phones. `match` scales a map so its mean color equals the
  * body's catalog color (for greyscale or albedo maps).
+ *
+ * `truth` recolors a map to the planet's measured color (see trueColor), as
+ * linear sRGB: the geometric albedos of Mallama, Krobusek & Pavlov 2017 (Icarus
+ * 282, Table 7) through the CIE 1931 observer under 5778 K sunlight. `luma` also
+ * sets the mean luminance, for a map far darker than the world it shows.
  */
 const TEXTURES = {
   sun: { sss: '8k_sun.jpg', size: 2048 },
-  mercury: { sss: '8k_mercury.jpg', size: 4096 },
-  'venus-atmosphere': { sss: '4k_venus_atmosphere.jpg', size: 4096 },
+  // The source map is neutral grey, so a plain tint is enough.
+  mercury: { sss: '8k_mercury.jpg', size: 4096, match: '#8a8173' },
+  'venus-atmosphere': { sss: '4k_venus_atmosphere.jpg', size: 4096, truth: [0.7, 0.6903, 0.6465] },
   earth: { sss: '8k_earth_daymap.jpg', size: 4096 },
   'earth-night': { sss: '8k_earth_nightmap.jpg', size: 4096 },
   'earth-clouds': { sss: '8k_earth_clouds.jpg', size: 4096, grey: true },
   'earth-normal': { sss: '8k_earth_normal_map.tif', size: 4096, quality: 92 },
   'earth-specular': { sss: '8k_earth_specular_map.tif', size: 2048, grey: true },
   moon: { sss: '8k_moon.jpg', size: 4096 },
-  mars: { sss: '8k_mars.jpg', size: 4096 },
+  mars: { sss: '8k_mars.jpg', size: 4096, truth: [0.2574, 0.1686, 0.0892] },
   jupiter: { sss: '8k_jupiter.jpg', size: 4096 },
   saturn: { sss: '8k_saturn.jpg', size: 4096 },
   'saturn-ring': { sss: '8k_saturn_ring_alpha.png', size: 4096, alpha: true, strip: true },
   uranus: { sss: '2k_uranus.jpg', size: 2048 },
-  neptune: { sss: '2k_neptune.jpg', size: 2048 },
+  // The source follows the enhanced Voyager 2 images; Irwin et al. 2024 show Neptune is nearly as pale as Uranus.
+  neptune: { sss: '2k_neptune.jpg', size: 2048, truth: [0.2648, 0.4451, 0.5628], luma: 0.52 },
   eris: { sss: '4k_eris_fictional.jpg', size: 2048, impression: true },
   haumea: { sss: '4k_haumea_fictional.jpg', size: 2048, impression: true },
   makemake: { sss: '4k_makemake_fictional.jpg', size: 2048, impression: true },
@@ -185,6 +192,85 @@ async function matchColor(raw, hex) {
   return sharp(out.data, { raw: out.info, limitInputPixels: false });
 }
 
+const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const toSrgb = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+const DECODE = Float32Array.from({ length: 256 }, (_, i) => toLinear(i / 255));
+const LUMA = [0.2126, 0.7152, 0.0722];
+
+/**
+ * One pixel recolored: a power curve on its R/G and B/G ratios, and a Reinhard-style curve with
+ * knee `k` on its luminance (Infinity leaves it alone). Unlike a power curve, that brightens
+ * a dark map while keeping its features' contrast, and white stays white.
+ */
+function recolor(r, g, b, [pr, pb, k]) {
+  const green = Math.max(g, 1e-4);
+  const rg = Math.max(r, 1e-4) / green;
+  const bg = Math.max(b, 1e-4) / green;
+  const y0 = LUMA[0] * r + LUMA[1] * g + LUMA[2] * b;
+  const y = k === Number.POSITIVE_INFINITY ? y0 : (y0 * (1 + k)) / (y0 + k);
+  const nr = rg ** pr;
+  const nb = bg ** pb;
+  const ng = y / (LUMA[0] * nr + LUMA[1] + LUMA[2] * nb);
+  return [Math.min(1, nr * ng), Math.min(1, ng), Math.min(1, nb * ng)];
+}
+
+/**
+ * The map recolored so its area-weighted mean is `truth`. Per-channel gains would tint
+ * polar caps and clouds; powers of the color ratios leave neutral pixels neutral.
+ */
+async function trueColor(raw, { truth, luma }) {
+  const source = await sharp(raw, { limitInputPixels: false })
+    .removeAlpha()
+    .toColourspace('srgb')
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const { data, info } = await sharp(source.data, { raw: source.info, limitInputPixels: false })
+    .resize(512, 256, { fit: 'fill' })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const mean = (powers) => {
+    const sum = [0, 0, 0];
+    let total = 0;
+    for (let y = 0; y < info.height; y++) {
+      const weight = Math.sin((Math.PI * (y + 0.5)) / info.height);
+      for (let x = 0; x < info.width; x++) {
+        const k = (y * info.width + x) * info.channels;
+        const out = recolor(DECODE[data[k]], DECODE[data[k + 1]], DECODE[data[k + 2]], powers);
+        for (let c = 0; c < 3; c++) sum[c] += out[c] * weight;
+        total += weight;
+      }
+    }
+    return sum.map((v) => v / total);
+  };
+  /** Bisects one power until `error` changes sign. */
+  const solve = (powers, index, low, high, error) => {
+    const at = (p) => error(mean(powers.with(index, p)));
+    let [lo, hi] = [low, high];
+    const rising = at(hi) > at(lo);
+    for (let i = 0; i < 18; i++) {
+      const mid = (lo + hi) / 2;
+      if (at(mid) > 0 === rising) hi = mid;
+      else lo = mid;
+    }
+    return powers.with(index, (lo + hi) / 2);
+  };
+  let powers = [1, 1, Number.POSITIVE_INFINITY];
+  for (let round = 0; round < 5; round++) {
+    powers = solve(powers, 0, 0, 1.5, ([r, g]) => r / g - truth[0] / truth[1]);
+    powers = solve(powers, 1, 0, 1.5, ([, g, b]) => b / g - truth[2] / truth[1]);
+    if (luma) powers = solve(powers, 2, 0.02, 4, (m) => LUMA[0] * m[0] + LUMA[1] * m[1] + LUMA[2] * m[2] - luma);
+  }
+  console.log(`     recolor R/G ^${powers[0].toFixed(3)}, B/G ^${powers[1].toFixed(3)}, luminance knee ${powers[2].toFixed(3)}`);
+
+  const out = Buffer.alloc(source.data.length);
+  const channels = source.info.channels;
+  for (let k = 0; k < out.length; k += channels) {
+    const c = recolor(DECODE[source.data[k]], DECODE[source.data[k + 1]], DECODE[source.data[k + 2]], powers);
+    for (let i = 0; i < 3; i++) out[k + i] = Math.round(toSrgb(c[i]) * 255);
+  }
+  return sharp(out, { raw: source.info, limitInputPixels: false });
+}
+
 const webp = (img, spec) => img.webp({ quality: spec.quality ?? 86, alphaQuality: 90, effort: 5 });
 
 /** Derives the phone tier from the shipped high-res map; nothing to do for maps already this small. */
@@ -212,7 +298,11 @@ function writeMidList() {
 
 async function writeTexture(id, raw, spec) {
   const encode = (img) => webp(img, spec);
-  const base = spec.match ? await matchColor(raw, spec.match) : sharp(raw, { limitInputPixels: false });
+  const base = spec.truth
+    ? await trueColor(raw, spec)
+    : spec.match
+      ? await matchColor(raw, spec.match)
+      : sharp(raw, { limitInputPixels: false });
   const prep = (img) => (spec.grey ? img.greyscale() : img);
   if (spec.strip) {
     // Ring strips keep their aspect ratio and alpha channel.

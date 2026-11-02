@@ -62,6 +62,8 @@ Solar System stands on the work of spacecraft teams, mappers, astronomers and op
 
 Maps are resized to 2:1 equirectangular frames and re-encoded as WebP; CC BY-SA 3.0 derivatives stay under CC BY-SA 3.0.
 
+The Mercury, Venus, Mars and Neptune maps are also recolored to the planets’ measured colors, listed under Science data.
+
 ## Science data
 
 | Data | Source | License |
@@ -71,6 +73,11 @@ Maps are resized to 2:1 equirectangular frames and re-encoded as WebP; CC BY-SA 
 | Rotation and pole models | [IAU WGCCRE](https://astrogeology.usgs.gov/groups/iau-wgccre) reports (2009, 2015) | Published data |
 | Yale Bright Star Catalogue, 5th ed. (V/50) | [Hoffleit & Warren, via CDS VizieR](https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50) | CDS terms (free with acknowledgement) |
 | Physical properties and facts | NASA Planetary Fact Sheets, JPL SSD, Wikipedia | Public domain / CC BY-SA 4.0 |
+| True colors of the planets | [Mallama, Krobusek & Pavlov 2017](https://arxiv.org/abs/1609.05048), geometric albedos | Published data |
+| True colors of Uranus and Neptune | [Irwin et al. 2024](https://doi.org/10.1093/mnras/stad3761) | Published data |
+| Blue Martian twilight | Curiosity Mastcam sunset, [PIA19400](https://science.nasa.gov/photojournal/sunset-in-mars-gale-crater/), NASA/JPL-Caltech/MSSS/Texas A&M Univ. | Colors measured from the image |
+| Ice haze above Martian dust | Mars Express HRSC, [atmospheric haze and limb](https://sci.esa.int/web/mars/-/49405-atmospheric-haze-and-limb), ESA/DLR/FU Berlin | Published observation |
+| Titan’s blue upper haze | Cassini natural-color view, [PIA06089](https://science.nasa.gov/resource/hazy-all-over/), NASA/JPL/Space Science Institute | Colors measured from the image |
 
 ## Software
 

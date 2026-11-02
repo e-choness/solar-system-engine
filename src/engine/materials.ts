@@ -251,7 +251,10 @@ export function atmosphereMaterial(def: BodyDef, u: BodyUniforms): THREE.MeshBas
     const twilight = smoothstep(-0.12, 0, lit)
       .mul(smoothstep(0.14, 0, lit))
       .mul(twilightView(ray, L));
-    const tint = mix(color3(atm.color), color3(atm.sunset ?? atm.color), twilight.mul(0.85));
+    // `h` is where the ray passes closest to the center, so (h - 1) / H is the height it grazes.
+    // The upper haze takes over from about half the shell's height (Mars: ice above ~30 km; Titan: the detached layer).
+    const layered = atm.high ? mix(color3(atm.color), color3(atm.high), smoothstep(0.45, 0.9, h.sub(1).div(H))) : color3(atm.color);
+    const tint = mix(layered, color3(atm.sunset ?? atm.color), twilight.mul(0.85));
     const light = smoothstep(-0.3, 0.15, lit);
     const forward = pow(saturate(dot(ray, L)), 8).mul(2.5);
     return tint

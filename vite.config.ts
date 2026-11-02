@@ -18,8 +18,13 @@ export default defineConfig({
     port: 5173,
     // The browser container reaches the dev server by its compose alias.
     allowedHosts: ['solar-dev'],
-    // Bind mounts from a Windows/macOS host don't emit inotify events inside the container.
-    watch: inDocker ? { usePolling: true, interval: 250 } : undefined,
+    watch: {
+      // Tool scratch (trailer frames, raw downloads): polling thousands of files there slows every
+      // response, and a stray .html file would reload the page mid-capture.
+      ignored: ['**/.cache/**', '**/.asset-cache/**'],
+      // Bind mounts from a Windows/macOS host don't emit inotify events inside the container.
+      ...(inDocker && { usePolling: true, interval: 250 }),
+    },
   },
   build: {
     target: 'es2023',

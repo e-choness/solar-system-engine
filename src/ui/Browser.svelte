@@ -240,7 +240,7 @@
       font-size: 11px;
     }
   }
-  @media (max-width: 760px), (max-height: 520px) {
+  @media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 900px) {
     .browser {
       height: 62vh;
       height: 62dvh;
