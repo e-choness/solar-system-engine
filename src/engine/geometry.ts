@@ -1,5 +1,6 @@
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as THREE from 'three/webgpu';
+import MODELS from '../data/generated/shapes.json';
 import type { Shape } from '../data/types.ts';
 
 let sphereHi: THREE.SphereGeometry | null = null;
@@ -129,5 +130,32 @@ function mergeGeometries(list: THREE.BufferGeometry[]): THREE.BufferGeometry {
 export function ringGeometry(inner: number, outer: number): THREE.BufferGeometry {
   const geo = new THREE.RingGeometry(inner, outer, 256, 4);
   geo.rotateX(-Math.PI / 2);
+  return geo;
+}
+
+/** Measured shape models built by scripts/fetch-assets.mjs, by body id: largest radius (km) and size. */
+export const SHAPE_MODELS: Record<string, { radius: number; triangles: number }> = MODELS;
+
+/**
+ * Streams a measured shape model (public/shapes/<id>.bin) as geometry of unit radius in
+ * the mesh axes (x, pole, −y); scale it by the model's radius.
+ */
+export async function loadShapeModel(id: string): Promise<THREE.BufferGeometry> {
+  const res = await fetch(`${import.meta.env.BASE_URL}shapes/${id}.bin`);
+  if (!res.ok) throw new Error(`${res.status} loading shapes/${id}.bin`);
+  const buf = await res.arrayBuffer();
+  const [magic, vertices, count] = new Uint32Array(buf, 0, 3);
+  if (magic !== 0x31504853) throw new Error(`shapes/${id}.bin is not a shape model`);
+  const q = new Int16Array(buf, 16, vertices * 3);
+  const position = new Float32Array(vertices * 3);
+  for (let i = 0; i < position.length; i++) position[i] = q[i] / 32767;
+  // Positions are padded to a whole number of 4-byte words.
+  const at = 16 + Math.ceil((vertices * 3) / 2) * 4;
+  const index = vertices > 0xffff ? new Uint32Array(buf, at, count) : new Uint16Array(buf, at, count);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
+  geo.setIndex(new THREE.BufferAttribute(index, 1));
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
   return geo;
 }

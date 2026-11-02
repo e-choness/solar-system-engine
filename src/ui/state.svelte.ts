@@ -22,6 +22,9 @@ export const app = $state({
   progressLabel: 'Starting engine',
   backend: '',
   error: '',
+  /** Why the engine could not start and what to do about it, when that is known. */
+  errorTitle: '',
+  errorAdvice: '',
   settings: initialSettings as Settings,
   telemetry: null as Telemetry | null,
   selectedId: null as string | null,

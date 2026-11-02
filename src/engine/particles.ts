@@ -32,7 +32,7 @@ import { rng } from './geometry.ts';
 type N = any;
 
 /** Soft round falloff for sprite particles: 1 at the centre, 0 at the edge. */
-const disc = () => {
+export const disc = () => {
   const d = length(uv().sub(0.5)).mul(2);
   return exp(d.mul(d).mul(-5)).sub(0.0067).max(0);
 };

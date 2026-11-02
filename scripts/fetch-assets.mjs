@@ -1,10 +1,12 @@
-// Downloads open-licensed textures, recordings and the bright-star catalog,
+// Downloads open-licensed textures, recordings, shape models and the bright-star catalog,
 // optimises them, and records attribution in src/data/generated/credits.json.
 //
-// Run in Docker: docker compose run --rm node npm run assets [textures|audio|stars|mid] [texture ids…]
+// Run in Docker: docker compose run --rm node npm run assets [textures|audio|stars|shapes|mid] [ids…]
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
+import { MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
 
 const CACHE = path.resolve('.asset-cache/raw');
@@ -21,6 +23,12 @@ const SSS = 'https://www.solarsystemscope.com/textures/download/';
 const SSS_CREDIT = { author: 'Solar System Scope (INOVE)', license: 'CC BY 4.0', url: 'https://www.solarsystemscope.com/textures/' };
 /** USGS Astrogeology global mosaics (public domain). */
 const USGS = 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/';
+/** SDO/AIA synoptic (Carrington) maps assembled by the STEREO Science Center (US government work). */
+const AIA_MAPS = 'https://stereo-ssc.nascom.nasa.gov/data/ins_data/secchi/carrmaps/aia/cm/fits/';
+/** Where the Sun's eruptions start: the brightest active regions of that map. */
+const SUN_ACTIVE = path.resolve('src/data/generated/sun-active.json');
+const SHAPES_DIR = path.resolve('public/shapes');
+const SHAPE_LIST = path.resolve('src/data/generated/shapes.json');
 
 /**
  * id → source: Solar System Scope (`sss`), Wikimedia Commons titles tried in
@@ -36,7 +44,18 @@ const USGS = 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/';
  * sets the mean luminance, for a map far darker than the world it shows.
  */
 const TEXTURES = {
-  sun: { sss: '8k_sun.jpg', size: 2048 },
+  // Real data: SDO/AIA 304 Å over one solar rotation near the 2024 maximum, at its full resolution (see aiaMap).
+  sun: {
+    url: `${AIA_MAPS}cmAIA304cr2290C0.fts.gz`,
+    aia: true,
+    credit: {
+      title: 'SDO/AIA 304 Å Carrington map, rotation 2290 (16 Oct – 13 Nov 2024)',
+      author: 'NASA/SDO and the AIA science team; map by the NASA STEREO Science Center',
+      license: 'Public domain',
+    },
+    // The map's native 0.125° grid; finer detail comes from the shader.
+    size: 2880,
+  },
   // The source map is neutral grey, so a plain tint is enough.
   mercury: { sss: '8k_mercury.jpg', size: 4096, match: '#8a8173' },
   'venus-atmosphere': { sss: '4k_venus_atmosphere.jpg', size: 4096, truth: [0.7, 0.6903, 0.6465] },
@@ -271,6 +290,283 @@ async function trueColor(raw, { truth, luma }) {
   return sharp(out, { raw: source.info, limitInputPixels: false });
 }
 
+/** Reads a gzipped single-image FITS file with 32-bit float pixels; rows run from the bottom (south) up. */
+function readFits(file) {
+  const buf = zlib.gunzipSync(fs.readFileSync(file));
+  const header = {};
+  let end = 0;
+  for (let off = 0; off < buf.length; off += 80) {
+    const card = buf.toString('latin1', off, off + 80);
+    if (card.startsWith('END')) {
+      end = off + 80;
+      break;
+    }
+    if (card[8] === '=') header[card.slice(0, 8).trim()] = card.slice(10).split('/')[0].replace(/'/g, '').trim();
+  }
+  if (Number(header.BITPIX) !== -32) throw new Error(`${file}: expected 32-bit float pixels, got BITPIX ${header.BITPIX}`);
+  const w = Number(header.NAXIS1);
+  const h = Number(header.NAXIS2);
+  const start = Math.ceil(end / 2880) * 2880;
+  const data = new Float32Array(w * h);
+  for (let i = 0; i < data.length; i++) data[i] = buf.readFloatBE(start + i * 4);
+  return { w, h, data };
+}
+
+/** Linear sRGB ramp for 304 Å intensity: dark filaments deep red, network orange, active regions near white. */
+const SOLAR_RAMP = [
+  [0, [0.16, 0.02, 0]],
+  [0.3, [0.55, 0.12, 0.01]],
+  [0.55, [0.92, 0.36, 0.04]],
+  [0.75, [1, 0.62, 0.16]],
+  [0.9, [1, 0.84, 0.48]],
+  [1, [1, 0.98, 0.9]],
+];
+
+function solarRamp(t) {
+  for (let k = 1; k < SOLAR_RAMP.length; k++) {
+    const [t1, c1] = SOLAR_RAMP[k];
+    if (t > t1 && k < SOLAR_RAMP.length - 1) continue;
+    const [t0, c0] = SOLAR_RAMP[k - 1];
+    const f = Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
+    return c0.map((v, i) => v + (c1[i] - v) * f);
+  }
+  return SOLAR_RAMP.at(-1)[1];
+}
+
+/** Mean linear color of an sRGB map, weighted by the area each row covers on the sphere. */
+async function meanColor(img) {
+  const { data, info } = await img.clone().removeAlpha().resize(512, 256, { fit: 'fill' }).raw().toBuffer({ resolveWithObject: true });
+  const sum = [0, 0, 0];
+  let total = 0;
+  for (let y = 0; y < info.height; y++) {
+    const weight = Math.sin((Math.PI * (y + 0.5)) / info.height);
+    for (let x = 0; x < info.width; x++) {
+      const k = (y * info.width + x) * info.channels;
+      for (let c = 0; c < 3; c++) sum[c] += weight * DECODE[data[k + c]];
+      total += weight;
+    }
+  }
+  return sum.map((v) => v / total);
+}
+
+/** The x in [lo, hi] where a decreasing f crosses zero. */
+function bisect(lo, hi, f) {
+  for (let i = 0; i < 16; i++) {
+    const mid = Math.sqrt(lo * hi);
+    if (f(mid) > 0) lo = mid;
+    else hi = mid;
+  }
+  return Math.sqrt(lo * hi);
+}
+
+/**
+ * The Sun's map from an SDO/AIA 304 Å synoptic map: calibration gaps filled, north
+ * up, Carrington longitude 0 in the centre column (the IAU prime meridian), and the
+ * log intensity coloured with SOLAR_RAMP, then curved to the mean color of the
+ * artistic map it replaces, so exposure, bloom and the Sun's familiar hue stay as they were.
+ * Also writes the brightest active regions to SUN_ACTIVE, where eruptions start.
+ */
+async function aiaMap(file) {
+  const { w, h, data } = readFits(file);
+  const bad = new Uint8Array(w * h);
+  for (let i = 0; i < data.length; i++) if (!(data[i] > 0)) bad[i] = 1;
+
+  // Assembly artefacts run the full height of the map: columns from a missing exposure are
+  // darker than their neighbours at every latitude, and the last days of the rotation
+  // brighten toward the 360° edge. Out they go, with a margin for their soft edges.
+  const median = (values) => values.sort((a, b) => a - b)[values.length >> 1] ?? 0;
+  const column = Float32Array.from({ length: w }, (_, x) => {
+    const values = [];
+    for (let y = h >> 2; y < (3 * h) >> 2; y++) if (!bad[y * w + x]) values.push(data[y * w + x]);
+    return median(values);
+  });
+  const odd = new Uint8Array(w);
+  for (let x = 0; x < w; x++) {
+    const around = [];
+    for (let d = 6; d <= 30; d++) around.push(column[(x + d) % w], column[(x - d + w) % w]);
+    const typical = median(around);
+    const nearEdge = x < 16 || x >= w - 16;
+    if (column[x] < 0.8 * typical || (nearEdge && column[x] > 1.15 * typical)) odd[x] = 1;
+  }
+  const oddColumns = [];
+  for (let x = 0; x < w; x++) {
+    if (![-3, -2, -1, 0, 1, 2, 3].some((d) => odd[(x + d + w) % w])) continue;
+    oddColumns.push(x);
+    for (let y = 0; y < h; y++) bad[y * w + x] = 1;
+  }
+
+  // Short gaps: interpolate along the row (longitude wraps).
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      if (!bad[row + x] || bad[row + ((x - 1 + w) % w)] !== 0) continue;
+      let len = 0;
+      while (len < w && bad[row + ((x + len) % w)]) len++;
+      if (len > w / 16) continue;
+      const a = data[row + ((x - 1 + w) % w)];
+      const b = data[row + ((x + len) % w)];
+      for (let k = 0; k < len; k++) {
+        const i = row + ((x + k) % w);
+        data[i] = a + ((b - a) * (k + 1)) / (len + 1);
+        bad[i] = 2;
+      }
+    }
+  }
+  // Poleward of 72° SDO sees the Sun edge-on, or not at all: replace that with the 72° ring,
+  // blurred more and more toward the pole until it is the ring's mean. The shader adds detail there.
+  const cap = Math.round(h / 10);
+  const fillCap = (edge, toward) => {
+    const ring = new Float32Array(w);
+    for (let k = 0; k < 6; k++) for (let x = 0; x < w; x++) ring[x] += data[(edge - toward * k) * w + x] / 6;
+    const mean = ring.reduce((a, b) => a + b) / w;
+    const prefix = new Float64Array(3 * w + 1);
+    for (let i = 0; i < 3 * w; i++) prefix[i + 1] = prefix[i] + ring[i % w];
+    for (let j = 1; j <= cap; j++) {
+      const f = j / cap;
+      const r = Math.max(1, Math.round((f * w) / 8));
+      const row = (edge + toward * j) * w;
+      for (let x = 0; x < w; x++) {
+        const box = (prefix[x + r + w + 1] - prefix[x - r + w]) / (2 * r + 1);
+        data[row + x] = box + (mean - box) * f * f;
+        bad[row + x] = 0;
+      }
+    }
+  };
+  fillCap(cap, -1); // south: FITS rows start there
+  fillCap(h - 1 - cap, 1);
+  const unfilled = bad.reduce((n, b) => n + (b === 1 ? 1 : 0), 0);
+  if (unfilled) throw new Error(`${file}: ${unfilled} pixels outside the polar caps have no data`);
+
+  const logs = Float32Array.from(data, (v) => Math.log(Math.max(v, 1e-3)));
+  // The rotation's first and last days meet at 0°/360° with different exposures: ramp the
+  // brightness on both sides over 15° so they meet halfway (row offsets smoothed over 5°).
+  const span = Math.round(w / 24);
+  const step = new Float32Array(h);
+  for (let y = 0; y < h; y++) {
+    let left = 0;
+    let right = 0;
+    for (let k = 6; k < 30; k++) {
+      left += logs[y * w + w - 1 - k] / 24;
+      right += logs[y * w + k] / 24;
+    }
+    step[y] = left - right;
+  }
+  for (let y = 0; y < h; y++) {
+    let d = 0;
+    let n = 0;
+    for (let k = Math.max(0, y - 20); k <= Math.min(h - 1, y + 20); k++, n++) d += step[k];
+    d /= n;
+    for (let k = 0; k < span; k++) {
+      const t = (1 - k / span) / 2;
+      logs[y * w + k] += d * t;
+      logs[y * w + w - 1 - k] -= d * t;
+    }
+  }
+  const sample = Array.from({ length: Math.floor(logs.length / 7) }, (_, k) => logs[k * 7]).sort((a, b) => a - b);
+  const lo = sample[Math.floor(sample.length * 0.005)];
+  const hi = sample[Math.floor(sample.length * 0.998)];
+  const level = Float32Array.from(logs, (v) => Math.min(1, Math.max(0, (v - lo) / (hi - lo))));
+
+  // A gamma on the level sets the brightness, powers on green and blue the hue (white stays white).
+  const color = (t, [gamma, pg, pb]) => {
+    const c = solarRamp(t ** gamma);
+    return [c[0], c[1] ** pg, c[2] ** pb];
+  };
+  /** Area-weighted mean over every 4th pixel, in linear light. */
+  const mean = (params) => {
+    const sum = [0, 0, 0];
+    let total = 0;
+    for (let y = 0; y < h; y += 4) {
+      const weight = Math.sin((Math.PI * (y + 0.5)) / h);
+      for (let x = 0; x < w; x += 4) {
+        const c = color(level[y * w + x], params);
+        for (let i = 0; i < 3; i++) sum[i] += weight * c[i];
+        total += weight;
+      }
+    }
+    return sum.map((v) => v / total);
+  };
+  const luma = (m) => LUMA[0] * m[0] + LUMA[1] * m[1] + LUMA[2] * m[2];
+  const target = await meanColor(sharp(path.join(CACHE, '8k_sun.jpg')));
+  let params = [1, 1, 1];
+  for (let round = 0; round < 4; round++) {
+    params = params.with(
+      0,
+      bisect(0.2, 5, (g) => luma(mean(params.with(0, g))) - luma(target)),
+    );
+    const ratio = (m, i) => m[i] / m[0] - target[i] / target[0];
+    params = params.with(
+      1,
+      bisect(0.2, 5, (p) => ratio(mean(params.with(1, p)), 1)),
+    );
+    params = params.with(
+      2,
+      bisect(0.2, 8, (p) => ratio(mean(params.with(2, p)), 2)),
+    );
+  }
+  console.log(
+    `     AIA ${w}×${h}, replaced columns ${oddColumns.join(' ')}; gamma ${params[0].toFixed(3)}, green ^${params[1].toFixed(3)}, blue ^${params[2].toFixed(3)} for mean ${target.map((v) => v.toFixed(3)).join(' ')}`,
+  );
+
+  const out = Buffer.alloc(w * h * 3);
+  for (let y = 0; y < h; y++) {
+    const src = (h - 1 - y) * w; // FITS rows start in the south
+    for (let x = 0; x < w; x++) {
+      const c = color(level[src + x], params);
+      const o = (y * w + ((x + (w >> 1)) % w)) * 3;
+      for (let i = 0; i < 3; i++) out[o + i] = Math.round(toSrgb(c[i]) * 255);
+    }
+  }
+  writeActiveRegions(w, h, level);
+  return sharp(out, { raw: { width: w, height: h, channels: 3 } });
+}
+
+/** The brightest active regions, at least 12° apart, as Carrington latitude/longitude in degrees. */
+function writeActiveRegions(w, h, level) {
+  const bins = new Float32Array(360 * 180);
+  const per = w / 360;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) bins[Math.floor(y / per) * 360 + Math.floor(x / per)] += level[y * w + x] / (per * per);
+  const smooth = new Float32Array(bins.length);
+  for (let b = 0; b < 180; b++)
+    for (let l = 0; l < 360; l++) {
+      let sum = 0;
+      for (let db = -2; db <= 2; db++)
+        for (let dl = -2; dl <= 2; dl++) sum += bins[Math.min(179, Math.max(0, b + db)) * 360 + ((l + dl + 360) % 360)];
+      smooth[b * 360 + l] = sum / 25;
+    }
+  const typical = [...smooth].sort((a, b) => a - b)[smooth.length >> 1];
+  const candidates = [];
+  for (let b = 40; b < 140; b++) for (let l = 0; l < 360; l++) candidates.push({ b, l, v: smooth[b * 360 + l] });
+  candidates.sort((a, b) => b.v - a.v);
+  const picked = [];
+  const deg = Math.PI / 180;
+  for (const c of candidates) {
+    if (picked.length === 12) break;
+    const lat = c.b + 0.5 - 90; // FITS rows start in the south
+    const lon = c.l + 0.5;
+    const near = picked.some(
+      (p) =>
+        Math.acos(
+          Math.min(
+            1,
+            Math.sin(lat * deg) * Math.sin(p.lat * deg) + Math.cos(lat * deg) * Math.cos(p.lat * deg) * Math.cos((lon - p.lon) * deg),
+          ),
+        ) <
+        12 * deg,
+    );
+    if (!near) picked.push({ lat, lon, v: c.v });
+  }
+  const top = picked[0].v;
+  const regions = picked.map((p) => ({
+    lat: Number(p.lat.toFixed(1)),
+    lon: Number(p.lon.toFixed(1)),
+    strength: Number(((p.v - typical) / (top - typical)).toFixed(3)),
+  }));
+  fs.writeFileSync(SUN_ACTIVE, `${JSON.stringify(regions, null, 2)}\n`);
+  console.log(`     ${regions.length} active regions → ${path.relative(process.cwd(), SUN_ACTIVE)}`);
+}
+
 const webp = (img, spec) => img.webp({ quality: spec.quality ?? 86, alphaQuality: 90, effort: 5 });
 
 /** Derives the phone tier from the shipped high-res map; nothing to do for maps already this small. */
@@ -298,11 +594,13 @@ function writeMidList() {
 
 async function writeTexture(id, raw, spec) {
   const encode = (img) => webp(img, spec);
-  const base = spec.truth
-    ? await trueColor(raw, spec)
-    : spec.match
-      ? await matchColor(raw, spec.match)
-      : sharp(raw, { limitInputPixels: false });
+  const base = spec.aia
+    ? await aiaMap(raw)
+    : spec.truth
+      ? await trueColor(raw, spec)
+      : spec.match
+        ? await matchColor(raw, spec.match)
+        : sharp(raw, { limitInputPixels: false });
   const prep = (img) => (spec.grey ? img.greyscale() : img);
   if (spec.strip) {
     // Ring strips keep their aspect ratio and alpha channel.
@@ -412,12 +710,207 @@ async function stars(credits) {
   console.log(`dat  stars.bin          ${rows.length} stars`);
 }
 
+/** The PDS Small Bodies Node's holdings at the University of Maryland. */
+const UMD = 'https://pdssbn.astro.umd.edu/holdings/';
+
+/**
+ * Measured shape models for small worlds with no surface imagery to map, replacing their
+ * procedural lumps up close. `unit` converts the file's lengths to km; `triangles` is the
+ * budget after simplification.
+ */
+const SHAPES = {
+  '67p': {
+    url: `${UMD}ro-c-multi-5-67p-shape-v2.0/data/triplate/spg_dlr/shap4s/cg_dlr_spg_shap4s_200k.wrl`,
+    triangles: 40000,
+    credit: {
+      title: 'SPG SHAP4S plate model, 200k plates (RO-C-MULTI-5-67P-SHAPE-V2.0)',
+      author: 'F. Preusker & F. Scholten (DLR); ESA/Rosetta/MPS for OSIRIS Team',
+      license: 'ESA Rosetta archive data, free use with credit',
+      url: `${UMD}ro-c-multi-5-67p-shape-v2.0/`,
+    },
+  },
+  tempel1: {
+    url: `${UMD}dif-c-hriv_its_mri-5-tempel1-shape-v2.0/data/tempel1_2012_cart.wrl`,
+    triangles: 24000,
+    credit: {
+      title: 'Plate shape model of comet 9P/Tempel 1, v2.0',
+      author: 'T. L. Farnham & P. C. Thomas; NASA Deep Impact',
+      license: 'Public domain',
+      url: `${UMD}dif-c-hriv_its_mri-5-tempel1-shape-v2.0/`,
+    },
+  },
+  hartley2: {
+    url: `${UMD}dif-c-hriv_mri-5-hartley2-shape-v1.0/data/hartley2_2012_cart.wrl`,
+    triangles: 24000,
+    credit: {
+      title: 'Plate shape model of comet 103P/Hartley 2, v1.0',
+      author: 'T. L. Farnham & P. C. Thomas; NASA EPOXI',
+      license: 'Public domain',
+      url: `${UMD}dif-c-hriv_mri-5-hartley2-shape-v1.0/`,
+    },
+  },
+  wild2: {
+    url: `${UMD}sdu-c-navcam-5-wild2-shape-model-v2.1/data/wild2_cart_full.tab`,
+    unit: 0.001,
+    triangles: 24000,
+    credit: {
+      title: 'Stardust NAVCAM shape model of comet 81P/Wild 2, v2.1',
+      author: 'T. Farnham, T. Duxbury & J.-Y. Li; NASA Stardust',
+      license: 'Public domain',
+      url: `${UMD}sdu-c-navcam-5-wild2-shape-model-v2.1/`,
+    },
+  },
+  arrokoth: {
+    url: `${UMD}pds4-nh_derived:arrokoth_shapemodel_porter2024-v1.0/arrokoth_porter_2024_v01.obj`,
+    triangles: 30000,
+    credit: {
+      title: 'New Horizons shape model of (486958) Arrokoth (Porter et al. 2024)',
+      author: 'S. B. Porter et al.; NASA/JHUAPL/SwRI New Horizons',
+      license: 'Public domain',
+      url: `${UMD}pds4-nh_derived:arrokoth_shapemodel_porter2024-v1.0/`,
+    },
+  },
+  didymos: {
+    url: `${UMD}pds4-dart_shapemodel:data_derived_didymos_model_v003-v1.0/didymos_g_9309mm_spc_obj_0000n00000_v003.obj`,
+    triangles: 24000,
+    credit: {
+      title: 'DART shape model of (65803) Didymos, v003 at 9.3 m (Daly et al. 2023)',
+      author: 'R. T. Daly et al.; NASA/Johns Hopkins APL DART',
+      license: 'Public domain',
+      url: `${UMD}pds4-dart_shapemodel:data_derived_didymos_model_v003-v1.0/`,
+    },
+  },
+};
+
+/** Vertices (km) and triangles of a Wavefront OBJ, VRML 2 or PDS vertex/plate table. */
+function parseShape(text, unit = 1) {
+  const pos = [];
+  const idx = [];
+  const polygon = (face) => {
+    for (let k = 1; k + 1 < face.length; k++) idx.push(face[0], face[k], face[k + 1]);
+  };
+  if (text.startsWith('#VRML')) {
+    const block = (key) => {
+      const at = text.search(new RegExp(`\\b${key}\\s*\\[`));
+      // Comments can sit inside the blocks ("# 2" after each vertex).
+      return text.slice(text.indexOf('[', at) + 1, text.indexOf(']', at)).replace(/#.*/g, '');
+    };
+    for (const s of block('point').match(/-?[\d.]+(?:e[-+]?\d+)?/gi)) pos.push(Number(s) * unit);
+    let face = [];
+    for (const s of block('coordIndex').match(/-?\d+/g)) {
+      const n = Number(s);
+      if (n >= 0) face.push(n);
+      else {
+        polygon(face);
+        face = [];
+      }
+    }
+  } else if (/^v\s/m.test(text)) {
+    for (const line of text.split('\n')) {
+      const t = line.trim().split(/\s+/);
+      if (t[0] === 'v') pos.push(Number(t[1]) * unit, Number(t[2]) * unit, Number(t[3]) * unit);
+      else if (t[0] === 'f')
+        polygon(
+          t.slice(1).map((s) => {
+            const n = Number.parseInt(s, 10);
+            return n < 0 ? pos.length / 3 + n : n - 1;
+          }),
+        );
+    }
+  } else {
+    // Counts, then "x y z flag" vertices, then 0-based "a b c flag" plates.
+    const lines = text.trim().split('\n');
+    const [nv, nf] = lines[0].trim().split(/\s+/).map(Number);
+    for (let i = 1; i <= nv; i++) {
+      const t = lines[i].trim().split(/\s+/);
+      pos.push(Number(t[0]) * unit, Number(t[1]) * unit, Number(t[2]) * unit);
+    }
+    for (let i = nv + 1; i <= nv + nf; i++) idx.push(...lines[i].trim().split(/\s+/).slice(0, 3).map(Number));
+  }
+  return { positions: Float32Array.from(pos), indices: Uint32Array.from(idx) };
+}
+
+/**
+ * Simplifies a model to its triangle budget and writes it as a small binary the engine
+ * streams in: a header (magic, vertex count, index count, radius in km), int16 positions in
+ * the engine's mesh axes (x, pole, −y) as fractions of the radius, then the indices.
+ */
+async function writeShape(id, spec) {
+  const raw = await download(spec.url, path.join(CACHE, `shape-${id}${path.extname(spec.url)}`));
+  const { positions, indices } = parseShape(fs.readFileSync(raw, 'utf8'), spec.unit);
+  const vertices = positions.length / 3;
+  if (!vertices || indices.some((i) => i >= vertices)) throw new Error(`${id}: malformed shape model`);
+  await MeshoptSimplifier.ready;
+  // Weld vertices that files repeat per face, so the simplifier sees one closed surface.
+  const weld = MeshoptSimplifier.generatePositionRemap(positions, 3);
+  const welded = [];
+  for (let t = 0; t < indices.length; t += 3) {
+    const [a, b, c] = [weld[indices[t]], weld[indices[t + 1]], weld[indices[t + 2]]];
+    if (a !== b && b !== c && a !== c) welded.push(a, b, c);
+  }
+  const source = Uint32Array.from(welded);
+  const target = Math.min(source.length, spec.triangles * 3);
+  const [simple, error] = MeshoptSimplifier.simplify(source, positions, 3, target, 0.05);
+
+  // Keep only the vertices still in use, in first-use order.
+  const order = new Map();
+  const out = new Uint32Array(simple.length);
+  simple.forEach((v, i) => {
+    if (!order.has(v)) order.set(v, order.size);
+    out[i] = order.get(v);
+  });
+  const kept = [...order.keys()];
+  let radius = 0;
+  for (const v of kept) radius = Math.max(radius, Math.hypot(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]));
+  // Faces must wind outwards: a positive enclosed volume.
+  let volume = 0;
+  for (let t = 0; t < out.length; t += 3) {
+    const [a, b, c] = [0, 1, 2].map((k) => kept[out[t + k]] * 3);
+    const [ax, ay, az, bx, by, bz, cx, cy, cz] = [a, a + 1, a + 2, b, b + 1, b + 2, c, c + 1, c + 2].map((i) => positions[i]);
+    volume += (ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx)) / 6;
+  }
+  if (volume < 0) for (let t = 0; t < out.length; t += 3) [out[t + 1], out[t + 2]] = [out[t + 2], out[t + 1]];
+
+  const q = new Int16Array(kept.length * 3 + (kept.length % 2 ? 1 : 0));
+  kept.forEach((v, i) => {
+    const [x, y, z] = [positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]].map((c) => Math.round((c / radius) * 32767));
+    q.set([x, z, -y], i * 3);
+  });
+  const header = new Uint32Array([0x31504853, kept.length, out.length, 0]);
+  new Float32Array(header.buffer)[3] = radius;
+  const index = kept.length > 0xffff ? out : Uint16Array.from(out);
+  const file = path.join(SHAPES_DIR, `${id}.bin`);
+  fs.writeFileSync(file, Buffer.concat([header, q, index].map((a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength))));
+  const bytes = fs.statSync(file).size;
+  console.log(
+    `shp  ${id.padEnd(9)} ${indices.length / 3} → ${out.length / 3} triangles, error ${(error * 100).toFixed(2)}%, ` +
+      `radius ${radius.toFixed(3)} km, volume ${Math.abs(volume).toPrecision(4)} km³, ${(bytes / 1024).toFixed(0)} KB`,
+  );
+  return { radius: Number(radius.toFixed(4)), triangles: out.length / 3 };
+}
+
+async function shapes(credits, ids) {
+  fs.mkdirSync(SHAPES_DIR, { recursive: true });
+  const list = fs.existsSync(SHAPE_LIST) ? JSON.parse(fs.readFileSync(SHAPE_LIST, 'utf8')) : {};
+  for (const [id, spec] of Object.entries(SHAPES)) {
+    if (ids.length && !ids.includes(id)) continue;
+    try {
+      list[id] = await writeShape(id, spec);
+      credits.shapes[id] = spec.credit;
+    } catch (err) {
+      console.warn(`shp  ${id}: ${err.message}`);
+    }
+  }
+  fs.writeFileSync(SHAPE_LIST, `${JSON.stringify(list, null, 2)}\n`);
+}
+
 for (const dir of [CACHE, TEX, AUDIO, DATA, path.dirname(CREDITS)]) fs.mkdirSync(dir, { recursive: true });
-const credits = { textures: {}, audio: {}, data: {} };
+const credits = { textures: {}, audio: {}, data: {}, shapes: {} };
 const only = process.argv[2];
 if (!only || only === 'textures') await textures(credits, process.argv.slice(3));
 if (!only || only === 'audio') await recordings(credits);
 if (!only || only === 'stars') await stars(credits);
+if (!only || only === 'shapes') await shapes(credits, only ? process.argv.slice(3) : []);
 if (only === 'mid') {
   // Backfills the phone tier from the shipped maps without touching the sources.
   for (const [id, spec] of Object.entries(TEXTURES)) await writeMid(id, spec);
@@ -429,5 +922,6 @@ const merged = {
   textures: { ...previous.textures, ...credits.textures },
   audio: { ...previous.audio, ...credits.audio },
   data: { ...previous.data, ...credits.data },
+  shapes: { ...previous.shapes, ...credits.shapes },
 };
 fs.writeFileSync(CREDITS, `${JSON.stringify(merged, null, 2)}\n`);

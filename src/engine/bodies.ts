@@ -1,10 +1,11 @@
 import * as THREE from 'three/webgpu';
 import { ECL_TO_SCENE, type Mat3, mulMM, SCENE_TO_ECL, type Vec3 } from './astro.ts';
-import { ringGeometry, shapeGeometry, unitSphere } from './geometry.ts';
+import { loadShapeModel, ringGeometry, SHAPE_MODELS, shapeGeometry, unitSphere } from './geometry.ts';
 import {
   atmosphereMaterial,
   type BodyUniforms,
   bodyUniforms,
+  chromosphereMaterial,
   cloudMaterial,
   coronaMaterial,
   type PlanetTextures,
@@ -25,6 +26,9 @@ const FLATTENING: Record<string, number> = {
   mars: 0.00589,
 };
 
+/** Height of the spicule fringe above the solar limb, as a fraction of the radius (about 14,000 km). */
+const CHROMOSPHERE = 0.02;
+
 const m4 = new THREE.Matrix4();
 
 export class BodyView {
@@ -43,6 +47,9 @@ export class BodyView {
   private corona?: THREE.Sprite;
   private readonly swaps: Array<[string, any]> = [];
   private highRequested = false;
+  /** A measured shape model replacing the procedural one, streamed once the body is in view. */
+  private readonly model?: { radius: number; triangles: number };
+  private modelRequested = false;
 
   constructor(state: BodyState, bank: TextureBank, seed: number) {
     this.state = state;
@@ -74,6 +81,10 @@ export class BodyView {
       this.corona.scale.set(R * 16, R * 16, 1);
       this.corona.renderOrder = 2;
       this.group.add(this.corona);
+      const chromosphere = new THREE.Mesh(unitSphere('hi'), chromosphereMaterial(this.uniforms, CHROMOSPHERE));
+      chromosphere.scale.setScalar(R * (1 + CHROMOSPHERE));
+      chromosphere.renderOrder = 3;
+      this.group.add(chromosphere);
     } else {
       const { material, nodes } = planetMaterial(def, textures, this.uniforms, seed);
       for (const [role, node] of Object.entries(nodes)) {
@@ -81,6 +92,7 @@ export class BodyView {
         if (id) this.swaps.push([id, node]);
       }
       if (def.shape) {
+        this.model = textures.map ? undefined : SHAPE_MODELS[def.id];
         const { geometry, extent } = shapeGeometry(def.shape, seed, Boolean(textures.map));
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.scale.setScalar(extent);
@@ -120,18 +132,37 @@ export class BodyView {
         ? Math.max(...def.shape.radii)
         : def.shape.lobes[0][0] + def.shape.lobes[1][0]
       : R;
-    this.extent = shapeR * (1 + (v.atmosphere?.height ?? 0));
+    // The camera keeps clear of the measured surface, which can reach past the procedural one.
+    const modelR = Math.max(shapeR, this.model?.radius ?? 0);
+    this.extent = modelR * (1 + (v.atmosphere?.height ?? 0));
     this.outerExtent = Math.max(this.extent, v.rings?.outer ?? 0);
 
     for (const [id, node] of this.swaps) bank.onUpgrade(id, (t) => (node.value = t));
   }
 
-  /** Streams full-resolution textures for this body. */
+  /** Streams full-resolution textures and the measured shape for this body. */
   requestHighRes(bank: TextureBank) {
+    this.requestShape();
     // A bank that evicts needs to hear which maps are still in use.
     if (this.highRequested && !bank.evicts) return;
     this.highRequested = true;
     for (const id of new Set(this.textureIds)) bank.upgrade(id);
+  }
+
+  /** Swaps the procedural lumps for the measured shape model, if this body has one. */
+  requestShape() {
+    const model = this.model;
+    if (!model || this.modelRequested) return;
+    this.modelRequested = true;
+    loadShapeModel(this.state.def.id).then(
+      (geometry) => {
+        const old = this.mesh.geometry;
+        this.mesh.geometry = geometry;
+        this.mesh.scale.setScalar(model.radius);
+        old.dispose();
+      },
+      (err) => console.warn(`Keeping the procedural shape of ${this.state.def.id}:`, err),
+    );
   }
 
   /**

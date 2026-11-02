@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
-import { isMobileDevice } from '../src/engine/device.ts';
+import { graphicsAdvice, isAppleMobile, isMobileDevice, preferredBackend, requestedBackend } from '../src/engine/device.ts';
 import { ResolutionGovernor } from '../src/engine/governor.ts';
 import { TextureBank } from '../src/engine/textures.ts';
 
@@ -28,6 +28,39 @@ describe('isMobileDevice', () => {
     expect(device(MAC, 'MacIntel', 0)).toBe(false);
     expect(device(WINDOWS, 'Win32', 0)).toBe(false);
     expect(device(WINDOWS, 'Win32', 10)).toBe(false);
+  });
+});
+
+describe('backend choice', () => {
+  const apple = (userAgent: string, platform = 'Linux', maxTouchPoints = 0) => isAppleMobile({ userAgent, platform, maxTouchPoints });
+
+  it('knows iPhones and iPads, but not Android or Macs', () => {
+    expect(apple(IPHONE, 'iPhone', 5)).toBe(true);
+    expect(apple(MAC, 'MacIntel', 5)).toBe(true);
+    expect(apple(MAC, 'MacIntel', 0)).toBe(false);
+    expect(apple(PIXEL, 'Linux armv8l', 5)).toBe(false);
+  });
+
+  it('starts iPhones and iPads on WebGL 2 and everything else on WebGPU', () => {
+    expect(preferredBackend({ appleMobile: true, forced: false, requested: null })).toBe('webgl');
+    expect(preferredBackend({ appleMobile: false, forced: false, requested: null })).toBe('webgpu');
+    expect(preferredBackend({ appleMobile: false, forced: true, requested: null })).toBe('webgl');
+  });
+
+  it('lets the URL override the choice', () => {
+    expect(requestedBackend('?backend=webgpu')).toBe('webgpu');
+    expect(requestedBackend('?x=1&backend=WebGL')).toBe('webgl');
+    expect(requestedBackend('?backend=vulkan')).toBeNull();
+    expect(requestedBackend('')).toBeNull();
+    expect(preferredBackend({ appleMobile: true, forced: true, requested: 'webgpu' })).toBe('webgpu');
+  });
+
+  it('explains a browser with graphics turned off', () => {
+    const off = { webgpu: false, webgl2: false, webgl: false };
+    expect(graphicsAdvice(off, true).advice).toMatch(/Lockdown Mode/);
+    expect(graphicsAdvice(off, false).advice).toMatch(/hardware acceleration/);
+    expect(graphicsAdvice({ webgpu: false, webgl2: false, webgl: true }, false).title).toMatch(/too old/);
+    expect(graphicsAdvice({ webgpu: false, webgl2: true, webgl: true }, true).title).toMatch(/driver/);
   });
 });
 
