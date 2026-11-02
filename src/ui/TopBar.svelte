@@ -1,13 +1,15 @@
 <script lang="ts">
-  import { CalendarClock, Expand, Eye, Info, Keyboard, ListTree, Minimize, Search, Settings, Volume2, VolumeX } from '@lucide/svelte';
+  import { CalendarClock, Ellipsis, Expand, Eye, Hand, Info, Keyboard, ListTree, Minimize, Search, Settings, Volume2, VolumeX } from '@lucide/svelte';
   import { CATALOG } from '../data/catalog.ts';
+  import { CAN_FULLSCREEN, MOBILE } from '../engine/device.ts';
   import { KIND_LABEL } from './format.ts';
-  import { app, audio, engine, updateSettings } from './state.svelte.ts';
+  import { app, audio, closeSheets, engine, updateSettings } from './state.svelte.ts';
 
   let query = $state('');
   let active = $state(0);
   let focused = $state(false);
   let fullscreen = $state(false);
+  let menuOpen = $state(false);
 
   const norm = (s: string) =>
     s
@@ -53,8 +55,15 @@
   function toggle(panel: 'settingsOpen' | 'helpOpen' | 'creditsOpen' | 'eventsOpen') {
     const open = !app[panel];
     app.settingsOpen = app.helpOpen = app.creditsOpen = app.eventsOpen = false;
+    if (app.compact) closeSheets();
     app[panel] = open;
     audio.sfx(open ? 'open' : 'close');
+  }
+
+  function toggleBrowser() {
+    const open = !app.browserOpen;
+    if (app.compact) closeSheets();
+    app.browserOpen = open;
   }
 
   async function toggleFullscreen() {
@@ -69,9 +78,22 @@
   });
 </script>
 
+{#snippet menuItem(label: string, onselect: () => void, Icon: typeof Info)}
+  <button
+    role="menuitem"
+    onclick={() => {
+      menuOpen = false;
+      onselect();
+    }}
+  >
+    <Icon size={18} />
+    {label}
+  </button>
+{/snippet}
+
 <header class="bar">
   <div class="left glass">
-    <button class="icon-btn" class:active={app.browserOpen} title="Bodies" aria-label="Toggle body browser" onclick={() => (app.browserOpen = !app.browserOpen)}>
+    <button class="icon-btn" class:active={app.browserOpen} title="Bodies" aria-label="Toggle body browser" onclick={toggleBrowser}>
       <ListTree size={18} />
     </button>
     <div class="brand">
@@ -83,7 +105,7 @@
       <input
         id="search"
         type="search"
-        placeholder="Search worlds…  /"
+        placeholder={MOBILE ? 'Search worlds…' : 'Search worlds…  /'}
         autocomplete="off"
         spellcheck="false"
         bind:value={query}
@@ -108,6 +130,25 @@
     </div>
   </div>
 
+  {#if app.compact}
+    <div class="right glass">
+      <button class="icon-btn" class:active={menuOpen} aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>
+        <Ellipsis size={20} />
+      </button>
+    </div>
+    {#if menuOpen}
+      <div class="scrim" role="presentation" onclick={() => (menuOpen = false)}></div>
+      <div class="menu glass scroll" role="menu">
+        {@render menuItem('Time travel', () => toggle('eventsOpen'), CalendarClock)}
+        {@render menuItem('Settings', () => toggle('settingsOpen'), Settings)}
+        {@render menuItem(app.settings.muted ? 'Unmute' : 'Mute', () => updateSettings({ muted: !app.settings.muted }), app.settings.muted ? VolumeX : Volume2)}
+        {@render menuItem('Hide interface', () => (app.hideUi = true), Eye)}
+        {#if CAN_FULLSCREEN}{@render menuItem(fullscreen ? 'Exit fullscreen' : 'Fullscreen', toggleFullscreen, fullscreen ? Minimize : Expand)}{/if}
+        {@render menuItem('Controls', () => toggle('helpOpen'), MOBILE ? Hand : Keyboard)}
+        {@render menuItem('About & credits', () => toggle('creditsOpen'), Info)}
+      </div>
+    {/if}
+  {:else}
   <div class="right glass">
     <button class="icon-btn" class:active={app.eventsOpen} title="Time travel" aria-label="Time travel events" onclick={() => toggle('eventsOpen')}>
       <CalendarClock size={18} />
@@ -136,6 +177,7 @@
       {#if fullscreen}<Minimize size={18} />{:else}<Expand size={18} />{/if}
     </button>
   </div>
+  {/if}
 </header>
 
 <style>
@@ -256,18 +298,67 @@
     font-size: 11px;
     color: var(--text-faint);
   }
-  @media (max-width: 760px) {
+  .scrim {
+    position: fixed;
+    inset: 0;
+    pointer-events: auto;
+  }
+  .menu {
+    position: absolute;
+    top: 62px;
+    right: 0;
+    width: 220px;
+    max-height: calc(100vh - var(--safe-t) - var(--safe-b) - 78px);
+    max-height: calc(100dvh - var(--safe-t) - var(--safe-b) - 78px);
+    padding: 6px;
+    border-radius: 16px;
+    pointer-events: auto;
+    animation: menu-in 0.22s var(--ease) both;
+  }
+  @keyframes menu-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+  }
+  .menu button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--text);
+    font-size: 14.5px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .menu button:active {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  @media (max-width: 760px), (max-height: 520px) {
+    .bar {
+      top: calc(8px + var(--safe-t));
+      left: calc(8px + var(--safe-l));
+      right: calc(8px + var(--safe-r));
+      gap: 8px;
+    }
+    .left {
+      flex: 1;
+      min-width: 0;
+      max-width: 420px;
+    }
     .brand {
       display: none;
     }
     .search,
     .search:focus-within {
-      width: 46vw;
-    }
-    .right {
-      flex-wrap: wrap;
-      max-width: 140px;
-      justify-content: flex-end;
+      flex: 1;
+      width: auto;
+      min-width: 0;
     }
   }
 </style>

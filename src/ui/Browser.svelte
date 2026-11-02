@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { ChevronRight } from '@lucide/svelte';
+  import { ChevronRight, X } from '@lucide/svelte';
   import { CATALOG, childrenOf } from '../data/catalog.ts';
   import type { BodyDef, BodyKind } from '../data/types.ts';
+  import Grab from './Grab.svelte';
   import { app, engine } from './state.svelte.ts';
 
   const groups: Array<{ title: string; kinds: BodyKind[] }> = [
@@ -43,10 +44,14 @@
   </li>
 {/snippet}
 
-<nav class="browser glass" aria-label="Solar system bodies">
+<nav class="browser glass sheet sheet-left" aria-label="Solar system bodies">
+  {#if app.compact}<Grab label="Close" ondown={() => (app.browserOpen = false)} ontap={() => (app.browserOpen = false)} />{/if}
   <div class="head">
     <span class="title">Explore</span>
     <span class="sub">{CATALOG.length} worlds</span>
+    {#if app.compact}
+      <button class="icon-btn close" aria-label="Close" onclick={() => (app.browserOpen = false)}><X size={16} /></button>
+    {/if}
   </div>
   <div class="list scroll">
     {#each groups as g (g.title)}
@@ -218,12 +223,42 @@
     color: var(--text-faint);
     font-family: var(--font-mono);
   }
-  @media (max-width: 760px) {
+  @media (pointer: coarse) {
+    .twisty,
+    .twisty-space {
+      width: 34px;
+      height: 44px;
+    }
+    .item {
+      height: 44px;
+    }
+    .name {
+      font-size: 15px;
+    }
+    .group {
+      padding: 14px 8px 8px;
+      font-size: 11px;
+    }
+  }
+  @media (max-width: 760px), (max-height: 520px) {
     .browser {
-      top: auto;
-      bottom: 150px;
-      height: 42vh;
-      width: min(280px, 80vw);
+      height: 62vh;
+      height: 62dvh;
+    }
+    .head {
+      align-items: center;
+      padding: 0 8px 4px 16px;
+    }
+    .close {
+      margin-left: 10px;
+    }
+    .sub {
+      margin-left: auto;
+    }
+  }
+  @media (max-height: 520px) and (orientation: landscape) {
+    .head {
+      padding-top: 6px;
     }
   }
 </style>

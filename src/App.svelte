@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { BODY_BY_ID } from './data/catalog.ts';
   import { AU_KM } from './engine/astro.ts';
+  import { forceWebGL, MOBILE, webglForced } from './engine/device.ts';
   import Browser from './ui/Browser.svelte';
   import Credits from './ui/Credits.svelte';
   import Events from './ui/Events.svelte';
@@ -9,7 +10,7 @@
   import InfoPanel from './ui/InfoPanel.svelte';
   import Loader from './ui/Loader.svelte';
   import SettingsPanel from './ui/SettingsPanel.svelte';
-  import { app, audio, engine, toast, updateSettings } from './ui/state.svelte.ts';
+  import { app, audio, closeSheets, engine, toast, updateSettings } from './ui/state.svelte.ts';
   import TimeBar from './ui/TimeBar.svelte';
   import Toasts from './ui/Toasts.svelte';
   import Tooltip from './ui/Tooltip.svelte';
@@ -21,8 +22,21 @@
 
   const PLANET_KEYS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
 
+  /** On a small screen an open sheet takes the space the details card would use. */
+  const sheetOpen = $derived(app.compact && (app.browserOpen || app.settingsOpen || app.eventsOpen));
+
   onMount(() => {
     const offs: Array<() => void> = [];
+    if (MOBILE) {
+      const onVisibility = () => audio.setBackgrounded(document.hidden);
+      const wake = () => audio.wake();
+      document.addEventListener('visibilitychange', onVisibility);
+      window.addEventListener('pointerdown', wake);
+      offs.push(() => {
+        document.removeEventListener('visibilitychange', onVisibility);
+        window.removeEventListener('pointerdown', wake);
+      });
+    }
     (async () => {
       try {
         await engine.init(stageEl, labelsEl, $state.snapshot(app.settings), (p, label) => {
@@ -44,6 +58,7 @@
           engine.on('select', (id) => {
             app.selectedId = id;
             if (app.stage !== 'explore') return;
+            if (id && app.compact) closeSheets();
             if (id) {
               audio.sfx('click');
               if (app.settings.autoPlayBodySounds) audio.playBody(BODY_BY_ID.get(id)!);
@@ -55,13 +70,33 @@
             app.hoveredId = id;
             if (id && app.stage === 'explore') audio.sfx('hover');
           }),
-          engine.on('flight', ({ duration }) => audio.whoosh(duration)),
+          engine.on('flight', ({ duration }) => {
+            if (app.compact) closeSheets();
+            audio.whoosh(duration);
+          }),
+          engine.on('tap', () => {
+            if (app.compact) closeSheets();
+          }),
+          engine.on('lost', (reason) => {
+            console.error('GPU context lost:', reason);
+            if (MOBILE && engine.backend === 'WebGPU') forceWebGL();
+            app.error = reason;
+            app.lost = true;
+            app.stage = 'error';
+          }),
         );
         engine.start();
         app.stage = 'title';
-        if (engine.backend !== 'WebGPU') toast('WebGPU is unavailable in this browser — running on WebGL 2.', 'warn', 6000);
+        // On a phone WebGL 2 is the normal case, and there is nothing the player could do about it.
+        if (engine.backend !== 'WebGPU' && !MOBILE) toast('WebGPU is unavailable in this browser — running on WebGL 2.', 'warn', 6000);
       } catch (err) {
         console.error(err);
+        // A phone whose WebGPU driver can't run the engine may still manage WebGL 2.
+        if (MOBILE && !webglForced()) {
+          forceWebGL();
+          location.reload();
+          return;
+        }
         app.error = err instanceof Error ? err.message : String(err);
         app.stage = 'error';
       }
@@ -118,7 +153,8 @@
   }
 
   async function begin() {
-    await audio.start();
+    // A browser that refuses audio must not leave the player stuck on the title screen.
+    await audio.start().catch((err) => console.warn('audio unavailable:', err));
     audio.applySettings($state.snapshot(app.settings));
     app.stage = 'explore';
     setTimeout(() => engine.focus('earth'), 350);
@@ -133,11 +169,11 @@
 {#if app.stage === 'explore' && !app.hideUi}
   <TopBar />
   {#if app.browserOpen}<Browser />{/if}
-  {#if app.selectedId}<InfoPanel id={app.selectedId} />{/if}
+  {#if app.selectedId && !sheetOpen}<InfoPanel id={app.selectedId} />{/if}
   <TimeBar onstep={stepRate} />
   {#if app.settingsOpen}<SettingsPanel />{/if}
   {#if app.eventsOpen}<Events />{/if}
-  <Tooltip />
+  {#if !MOBILE}<Tooltip />{/if}
 {/if}
 {#if app.helpOpen}<Help />{/if}
 {#if app.creditsOpen}<Credits />{/if}
@@ -157,8 +193,8 @@
   }
   .unhide {
     position: fixed;
-    right: 16px;
-    bottom: 16px;
+    right: calc(16px + var(--safe-r));
+    bottom: calc(16px + var(--safe-b));
     padding: 8px 14px;
     border-radius: 999px;
     color: var(--text-dim);

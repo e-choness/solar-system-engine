@@ -34,6 +34,15 @@
   --kind-asteroid: #e0b37a;
   --kind-comet: #9edcff;
 
+  /* Notches and home indicators; zero everywhere else. */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  /* The band sheets dock into on small screens, between the top bar and the time bar. */
+  --dock-top: calc(var(--safe-t) + 70px);
+  --dock-bottom: calc(var(--safe-b) + var(--timebar-h, 60px) + 16px);
+
   color-scheme: dark;
 }
 
@@ -283,6 +292,121 @@ button {
   display: block;
   touch-action: none;
   outline: none;
+}
+
+/* ───────────── touch screens */
+@media (pointer: coarse) {
+  :root {
+    /* Re-blurring the live canvas behind every panel, every frame, is too much for a phone GPU. */
+    --glass-blur: none;
+    --glass-bg: linear-gradient(145deg, rgba(40, 46, 66, 0.92), rgba(12, 16, 30, 0.92) 55%);
+  }
+
+  html,
+  body {
+    overscroll-behavior: none;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  input {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* iOS zooms the page into any text field smaller than this, and stays zoomed. */
+  input:not([type='range'], [type='checkbox']) {
+    font-size: 16px !important;
+  }
+
+  input[type='range'] {
+    min-height: 32px;
+  }
+
+  .scroll {
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .pill-btn {
+    min-height: 44px;
+  }
+
+  /* Hover states stick after a tap. */
+  .icon-btn:hover {
+    background: transparent;
+    color: var(--text-dim);
+    border-color: transparent;
+  }
+
+  .icon-btn.active:hover {
+    background: rgba(142, 197, 255, 0.16);
+    color: var(--accent);
+    border-color: rgba(142, 197, 255, 0.3);
+  }
+
+  /* The canvas picks labels for touch, so a drag can start anywhere. */
+  .label {
+    pointer-events: none;
+  }
+}
+
+/* ───────────── small screens: panels become sheets docked above the time bar */
+@media (max-width: 760px), (max-height: 520px) {
+  html .sheet.glass {
+    top: auto;
+    left: calc(8px + var(--safe-l));
+    right: calc(8px + var(--safe-r));
+    bottom: var(--dock-bottom);
+    width: auto;
+    /* Always leave some of the scene showing: tapping it closes the sheet. */
+    max-height: min(72dvh, calc(100dvh - var(--dock-top) - var(--dock-bottom)));
+    animation: sheet-in 0.32s var(--ease) both;
+  }
+
+  .sheet .scroll {
+    min-height: 0;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  /* Short and wide: the scene stays in the middle, sheets take one side. */
+  html .sheet.glass {
+    top: var(--dock-top);
+    left: auto;
+    width: min(340px, 46vw);
+    height: auto;
+    animation-name: sheet-side;
+  }
+
+  html .sheet.sheet-left.glass {
+    left: calc(8px + var(--safe-l));
+    right: auto;
+  }
+
+  html .info.sheet.glass:not(.expanded) {
+    bottom: auto;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+@keyframes sheet-side {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

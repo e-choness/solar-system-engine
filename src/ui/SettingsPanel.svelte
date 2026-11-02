@@ -1,6 +1,8 @@
 <script lang="ts">
   import { RotateCcw, X } from '@lucide/svelte';
+  import { MOBILE } from '../engine/device.ts';
   import { DEFAULT_SETTINGS, QUALITY, type Quality, type Settings } from '../engine/settings.ts';
+  import Grab from './Grab.svelte';
   import { app, audio, updateSettings } from './state.svelte.ts';
 
   type BoolKey = { [K in keyof Settings]: Settings[K] extends boolean ? K : never }[keyof Settings];
@@ -22,24 +24,32 @@
   ];
 
   const set = (patch: Partial<Settings>) => updateSettings(patch);
+  // Ultra is a promise of full-resolution maps, which phones don't stream.
+  const presets = Object.entries(QUALITY).filter(([q]) => !MOBILE || q !== 'ultra');
+  const hide = () => (app.settingsOpen = false);
 </script>
 
-<section class="panel glass" aria-label="Settings">
+<section class="panel glass sheet" aria-label="Settings">
+  {#if app.compact}<Grab label="Close" ondown={hide} ontap={hide} />{/if}
   <header>
     <h2>Settings</h2>
-    <button class="icon-btn" aria-label="Close settings" onclick={() => (app.settingsOpen = false)}><X size={16} /></button>
+    <button class="icon-btn" aria-label="Close settings" onclick={hide}><X size={16} /></button>
   </header>
 
   <div class="scroll content">
     <h3>Graphics</h3>
-    <div class="seg" role="radiogroup" aria-label="Quality">
-      {#each Object.entries(QUALITY) as [q, preset] (q)}
+    <div class="seg" style:--presets={presets.length} role="radiogroup" aria-label="Quality">
+      {#each presets as [q, preset] (q)}
         <button role="radio" aria-checked={app.settings.quality === q} class:on={app.settings.quality === q} onclick={() => set({ quality: q as Quality })}>
           {preset.label}
         </button>
       {/each}
     </div>
-    <p class="hint">Ultra streams full-resolution 8K surface maps for every world you visit.</p>
+    <p class="hint">
+      {MOBILE
+        ? 'Lower quality saves battery. The picture also softens on its own to keep the motion smooth.'
+        : 'Ultra streams full-resolution 8K surface maps for every world you visit.'}
+    </p>
 
     {#each toggles as [key, label, kbd] (key)}
       <label class="row">
@@ -134,7 +144,7 @@
   }
   .seg {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(var(--presets), 1fr);
     gap: 3px;
     padding: 3px;
     border-radius: 11px;
@@ -228,5 +238,30 @@
     margin-top: 14px;
     font-size: 12.5px;
     padding: 8px 14px;
+  }
+  @media (pointer: coarse) {
+    .seg button {
+      min-height: 40px;
+      font-size: 13.5px;
+    }
+    .row {
+      min-height: 44px;
+      font-size: 14px;
+    }
+    .row.slider {
+      min-height: 0;
+    }
+    .switch {
+      transform: scale(1.2);
+      margin-right: 3px;
+    }
+    kbd {
+      display: none;
+    }
+  }
+  @media (max-width: 760px), (max-height: 520px) {
+    header {
+      padding-top: 0;
+    }
   }
 </style>

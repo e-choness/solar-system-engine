@@ -17,6 +17,8 @@ export interface LabelFrame {
   opacity: number;
 }
 
+type Rect = [number, number, number, number];
+
 interface Item {
   el: HTMLButtonElement;
   width: number;
@@ -31,6 +33,8 @@ export class LabelLayer {
   private readonly items = new Map<string, Item>();
   private selected: string | null = null;
   private hovered: string | null = null;
+  /** The labels on show, for touch picking. */
+  private rects: Array<{ id: string; rect: Rect }> = [];
 
   constructor(
     private readonly root: HTMLElement,
@@ -53,8 +57,8 @@ export class LabelLayer {
         e.stopPropagation();
         handlers.focus(b.id);
       });
-      el.addEventListener('pointerenter', () => handlers.hover(b.id));
-      el.addEventListener('pointerleave', () => handlers.hover(null));
+      el.addEventListener('pointerenter', (e) => e.pointerType === 'mouse' && handlers.hover(b.id));
+      el.addEventListener('pointerleave', (e) => e.pointerType === 'mouse' && handlers.hover(null));
       root.appendChild(el);
       this.items.set(b.id, { el, width: 18 + b.name.length * 7.2, shown: false });
     }
@@ -77,18 +81,25 @@ export class LabelLayer {
     this.root.style.display = visible ? '' : 'none';
   }
 
+  /** The label under a point. Touch goes through the canvas, so drags can start on a label. */
+  hit(x: number, y: number): string | null {
+    return this.rects.find(({ rect: r }) => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])?.id ?? null;
+  }
+
   update(frames: LabelFrame[]) {
     frames.sort((a, b) => a.priority - b.priority);
-    const placed: Array<[number, number, number, number]> = [];
+    const placed: Rect[] = [];
+    this.rects = [];
     const visible = new Set<string>();
     for (const f of frames) {
       const item = this.items.get(f.id);
       if (!item) continue;
       const x0 = f.x + f.ring + 2;
-      const rect: [number, number, number, number] = [x0 - 6, f.y - 9, x0 + item.width, f.y + 9];
+      const rect: Rect = [x0 - 6, f.y - 9, x0 + item.width, f.y + 9];
       const force = f.id === this.selected || f.id === this.hovered;
       if (!force && placed.some((p) => rect[0] < p[2] && rect[2] > p[0] && rect[1] < p[3] && rect[3] > p[1])) continue;
       placed.push(rect);
+      this.rects.push({ id: f.id, rect });
       visible.add(f.id);
       const el = item.el;
       if (!item.shown) {

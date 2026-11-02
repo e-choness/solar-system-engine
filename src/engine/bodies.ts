@@ -128,7 +128,8 @@ export class BodyView {
 
   /** Streams full-resolution textures for this body. */
   requestHighRes(bank: TextureBank) {
-    if (this.highRequested) return;
+    // A bank that evicts needs to hear which maps are still in use.
+    if (this.highRequested && !bank.evicts) return;
     this.highRequested = true;
     for (const id of new Set(this.textureIds)) bank.upgrade(id);
   }

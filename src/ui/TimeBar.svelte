@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronsLeft, ChevronsRight, Clock, Pause, Play } from '@lucide/svelte';
+  import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronUp, Clock, Pause, Play } from '@lucide/svelte';
   import { dateFromJd, jdFromDate } from '../engine/astro.ts';
   import { JD_MAX, JD_MIN } from '../engine/Engine.ts';
   import { BODY_BY_ID } from '../data/catalog.ts';
@@ -15,6 +15,14 @@
   const focus = $derived(t ? BODY_BY_ID.get(t.focusId) : null);
   let editing = $state(false);
   let draft = $state('');
+  /** Small screens keep the year slider and flight readout behind a toggle. */
+  let open = $state(false);
+  let barHeight = $state(0);
+
+  // Sheets dock above the bar, whose height depends on what it is showing.
+  $effect(() => {
+    if (barHeight) document.documentElement.style.setProperty('--timebar-h', `${barHeight}px`);
+  });
 
   function togglePause() {
     engine.setPaused(!engine.paused);
@@ -58,7 +66,7 @@
 </script>
 
 {#if t && when}
-  <div class="timebar glass">
+  <div class="timebar glass" class:open bind:clientHeight={barHeight}>
     <div class="when">
       {#if editing}
         <!-- svelte-ignore a11y_autofocus -->
@@ -90,7 +98,14 @@
         {#if t.paused}<Play size={18} />{:else}<Pause size={18} />{/if}
       </button>
       <button class="icon-btn" title="Faster ( ] )" aria-label="Faster" onclick={() => onstep(1)}><ChevronsRight size={18} /></button>
-      <button class="pill-btn now" title="Return to the present (N)" onclick={goNow} disabled={live}><Clock size={14} /> Now</button>
+      <button class="pill-btn now" title="Return to the present (N)" aria-label="Return to the present" onclick={goNow} disabled={live}>
+        <Clock size={14} /> <span class="now-word">Now</span>
+      </button>
+      {#if app.compact}
+        <button class="icon-btn toggle" aria-label="More time controls" aria-expanded={open} onclick={() => (open = !open)}>
+          {#if open}<ChevronDown size={18} />{:else}<ChevronUp size={18} />{/if}
+        </button>
+      {/if}
     </div>
 
     <label class="scrub">
@@ -127,6 +142,12 @@
     from {
       opacity: 0;
       transform: translate(-50%, 14px);
+    }
+  }
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
     }
   }
   .when {
@@ -266,13 +287,93 @@
       display: none;
     }
   }
-  @media (max-width: 760px) {
+  @media (max-width: 760px), (max-height: 520px) {
+    .timebar {
+      left: calc(8px + var(--safe-l));
+      right: calc(8px + var(--safe-r));
+      bottom: calc(8px + var(--safe-b));
+      transform: none;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 4px 8px;
+      padding: 6px 8px 6px 14px;
+      max-width: none;
+      animation-name: fade-up;
+    }
+    .controls {
+      margin-left: auto;
+    }
+    .now {
+      margin-left: 2px;
+      padding: 0;
+      width: 44px;
+      min-height: 44px;
+      justify-content: center;
+    }
+    .now-word {
+      display: none;
+    }
+    /* The date is short text in a tall row: let the tap target fill the row. */
+    .date {
+      position: relative;
+    }
+    .date::after {
+      content: '';
+      position: absolute;
+      inset: -14px -8px -8px -12px;
+    }
+    .toggle {
+      width: 36px;
+    }
+    .edit {
+      width: 150px;
+    }
+    .scrub,
     .where {
       display: none;
     }
-    .timebar {
-      gap: 10px;
-      padding: 8px 10px;
+    .timebar.open .scrub {
+      display: flex;
+      flex: 1 1 100%;
+      width: auto;
+      order: 3;
+      padding-right: 6px;
+    }
+    .timebar.open .where {
+      display: grid;
+      grid-template-columns: auto auto auto auto;
+      flex: 1 1 100%;
+      order: 4;
+      padding: 0 0 4px;
+      border-left: 0;
+      justify-content: start;
+    }
+  }
+  @media (max-width: 760px) and (orientation: portrait) {
+    /* Narrow: stack the status under the date to leave the row to the controls. */
+    .when {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+    }
+    .d {
+      font-size: 14.5px;
+    }
+    .tm {
+      display: none;
+    }
+    .badge {
+      min-width: 0;
+      padding: 1px 7px;
+      font-size: 10.5px;
+    }
+  }
+  @media (max-width: 345px) {
+    .controls :global(.icon-btn) {
+      width: 36px;
+    }
+    .now {
+      width: 36px;
     }
   }
 </style>

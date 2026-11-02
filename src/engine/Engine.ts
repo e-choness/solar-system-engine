@@ -7,6 +7,8 @@ import type { BodyKind } from '../data/types.ts';
 import { AU_KM, dateFromJd, J2000, jdFromDate, length, type Vec3 } from './astro.ts';
 import { BodyView } from './bodies.ts';
 import { CameraRig } from './camera.ts';
+import { MOBILE, webglForced } from './device.ts';
+import { ResolutionGovernor } from './governor.ts';
 import { type LabelFrame, LabelLayer } from './labels.ts';
 import { SHARED } from './materials.ts';
 import { Orbits } from './orbits.ts';
@@ -43,10 +45,23 @@ interface EngineEvents {
   hover: string | null;
   flight: { to: string; duration: number };
   arrive: string;
+  /** A tap on the canvas, with whatever it hit. */
+  tap: string | null;
+  /** The GPU device or context is gone; only a reload brings it back. */
+  lost: string;
 }
 
 const KIND_PRIORITY: Record<BodyKind, number> = { star: 0, planet: 10, dwarf: 30, moon: 40, asteroid: 50, comet: 45 };
 const MARKER_SIZE: Record<BodyKind, number> = { star: 20, planet: 7, dwarf: 5, moon: 4, asteroid: 3.5, comet: 4.5 };
+
+/** A fingertip is far less precise than a cursor (px). */
+const TOUCH_SLOP = 24;
+const DOUBLE_TAP_MS = 350;
+const DOUBLE_TAP_PX = 32;
+/** Skip frames that come sooner than this: 120 Hz phones would otherwise run hot for no visible gain. */
+const MOBILE_FRAME_MS = 1000 / 70;
+/** High-tier maps a phone keeps at once: Earth alone uses five. */
+const MOBILE_HIGH_MAPS = 12;
 
 /** Valid date window of the planetary theory (JPL approximate elements). */
 export const JD_MIN = jdFromDate(new Date('1800-01-01T00:00:00Z'));
@@ -59,7 +74,7 @@ export class Engine {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(50, 1, 1e-3, 1e15);
   private pipeline!: THREE.RenderPipeline;
-  private pipelineNodes!: { plain: any; full: any; flareGain: any; bloom: any };
+  private pipelineNodes!: { plain: any; bloomed: any; full: any; flareGain: any; bloom: any };
   private bank!: TextureBank;
   private readonly views = new Map<string, BodyView>();
   private orbits!: Orbits;
@@ -69,6 +84,8 @@ export class Engine {
   private sky!: Sky;
   private labels!: LabelLayer;
   private light!: THREE.PointLight;
+  /** Only phones trade resolution for frame rate; desktop always renders at the quality setting. */
+  private readonly governor = MOBILE ? new ResolutionGovernor() : null;
   rig!: CameraRig;
 
   jd = jdFromDate(new Date());
@@ -110,7 +127,16 @@ export class Engine {
   async init(container: HTMLElement, labelRoot: HTMLElement, settings: Settings, onProgress: (p: number, label: string) => void) {
     this.container = container;
     this.settings = { ...settings };
-    this.renderer = new THREE.WebGPURenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGPURenderer({
+      antialias: true,
+      logarithmicDepthBuffer: true,
+      powerPreference: 'high-performance',
+      forceWebGL: webglForced(),
+    });
+    this.renderer.onDeviceLost = (info: { message: string }) => {
+      this.renderer.setAnimationLoop(null);
+      this.emit('lost', info.message);
+    };
     await this.renderer.init();
     this.backend = (this.renderer.backend as any).isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -119,7 +145,10 @@ export class Engine {
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.classList.add('viewport');
 
-    this.bank = new TextureBank((done, total) => onProgress(0.05 + 0.8 * (done / total), 'Loading planetary maps'));
+    this.bank = new TextureBank(
+      (done, total) => onProgress(0.05 + 0.8 * (done / total), 'Loading planetary maps'),
+      MOBILE ? { mid: true, keep: MOBILE_HIGH_MAPS } : undefined,
+    );
     this.bank.setAnisotropy(QUALITY[settings.quality].anisotropy);
     const ids = new Set<string>(['stars']);
     for (const b of this.system.bodies) {
@@ -141,7 +170,7 @@ export class Engine {
 
     this.system.update(this.jd);
     // Opening shot: the inner solar system from above the ecliptic.
-    this.rig.jumpTo(this.system.get('sun')!, 4.2 * AU_KM);
+    this.rig.jumpTo(this.system.get('sun')!, Math.max(4.2 * AU_KM, this.widthFit(1.3 * AU_KM)));
     this.rig.pitch = 0.62;
     this.rig.yaw = 2.2;
     onProgress(1, 'Ready');
@@ -154,7 +183,7 @@ export class Engine {
       this.views.set(b.def.id, view);
       this.scene.add(view.group);
       if (b.def.kind === 'comet') {
-        const tail = new CometTail(4000, i * 13 + 1);
+        const tail = new CometTail(MOBILE ? 1500 : 4000, i * 13 + 1);
         this.tails.set(b.def.id, tail);
         this.scene.add(tail.group);
       }
@@ -198,8 +227,27 @@ export class Engine {
       float(1),
       5,
     );
-    this.pipelineNodes = { plain: color, full: color.add(glow).add(flare.mul(flareGain).mul(0.6)), flareGain, bloom: glow };
-    this.pipeline.outputNode = this.pipelineNodes.full;
+    const bloomed = color.add(glow);
+    this.pipelineNodes = { plain: color, bloomed, full: bloomed.add(flare.mul(flareGain).mul(0.6)), flareGain, bloom: glow };
+    this.pipeline.outputNode = this.lit(this.settings);
+  }
+
+  /** The composite with bloom: flare passes stay out of the frame on quality levels that don't show them. */
+  private lit(s: Settings) {
+    return QUALITY[s.quality].flare ? this.pipelineNodes.full : this.pipelineNodes.bloomed;
+  }
+
+  private applyPixelRatio() {
+    const q = QUALITY[this.settings.quality];
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pixelRatio) * (this.governor?.scale ?? 1));
+  }
+
+  /**
+   * Camera distance at which something of this radius spans 85% of the viewport's
+   * width. Shots are framed by height, which a tall viewport would crop at the sides.
+   */
+  private widthFit(radius: number) {
+    return radius / (0.85 * Math.tan((this.camera.fov * Math.PI) / 360) * (this.width / this.height));
   }
 
   applySettings(s: Settings) {
@@ -207,11 +255,12 @@ export class Engine {
     this.settings = { ...s };
     const q = QUALITY[s.quality];
     if (this.renderer) {
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pixelRatio));
+      if (prev.quality !== s.quality) this.governor?.reset();
+      this.applyPixelRatio();
       this.resize();
     }
     if (this.pipeline && (prev.bloom !== s.bloom || prev.quality !== s.quality || !this.pipeline.outputNode)) {
-      this.pipeline.outputNode = s.bloom ? this.pipelineNodes.full : this.pipelineNodes.plain;
+      this.pipeline.outputNode = s.bloom ? this.lit(s) : this.pipelineNodes.plain;
       this.pipeline.needsUpdate = true;
     }
     if (this.pipelineNodes) this.pipelineNodes.flareGain.value = q.flare ? 1 : 0;
@@ -263,7 +312,8 @@ export class Engine {
     // Broad, bright ring systems (Saturn) widen the framing; narrow ringlets (Uranus, Neptune) don't.
     const rings = body.def.visual.rings;
     const ringed = Boolean(rings && !rings.ringlets && rings.opacity > 0.5);
-    const distance = body.def.kind === 'star' ? view.extent * 6 : ringed ? view.outerExtent * 2.6 : view.extent * 4.2;
+    const framed = body.def.kind === 'star' ? view.extent * 6 : ringed ? view.outerExtent * 2.6 : view.extent * 4.2;
+    const distance = Math.max(framed, this.widthFit(ringed ? view.outerExtent : view.extent));
     const sunDir = new THREE.Vector3(-body.pos[0], -body.pos[2], body.pos[1]).normalize();
     const camDir = new THREE.Vector3(
       this.rig.position[0] - body.pos[0],
@@ -331,14 +381,21 @@ export class Engine {
     const pointers = new Map<number, { x: number; y: number }>();
     let downAt = { x: 0, y: 0, t: 0 };
     let pinch = 0;
+    /** A second finger came down: this gesture is a pinch, whatever happens next. */
+    let multi = false;
+    let touched = false;
+    let lastTap = { x: 0, y: 0, t: 0 };
 
     el.addEventListener('pointerdown', (e) => {
       el.setPointerCapture(e.pointerId);
+      if (pointers.size === 0) multi = false;
+      touched = e.pointerType === 'touch';
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       downAt = { x: e.clientX, y: e.clientY, t: performance.now() };
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
         pinch = Math.hypot(a.x - b.x, a.y - b.y);
+        multi = true;
       }
     });
     el.addEventListener('pointermove', (e) => {
@@ -364,14 +421,22 @@ export class Engine {
       pointers.delete(e.pointerId);
       if (pointers.size < 2) pinch = 0;
       const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
-      if (e.type === 'pointerup' && moved < 6 && performance.now() - downAt.t < 450) {
-        const id = this.pick(e.clientX, e.clientY);
+      if (e.type === 'pointerup' && !multi && moved < (touched ? 12 : 6) && performance.now() - downAt.t < 450) {
+        const id = this.pick(e.clientX, e.clientY, touched);
         this.select(id);
+        this.emit('tap', id);
+        if (touched) {
+          const now = performance.now();
+          const twice = now - lastTap.t < DOUBLE_TAP_MS && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX;
+          lastTap = { x: e.clientX, y: e.clientY, t: twice ? 0 : now };
+          if (twice && id) this.focus(id);
+        }
       }
     };
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
     el.addEventListener('dblclick', (e) => {
+      if (touched) return; // Double taps are handled above: not every mobile browser sends this event.
       const id = this.pick(e.clientX, e.clientY);
       if (id) this.focus(id);
     });
@@ -395,7 +460,7 @@ export class Engine {
   }
 
   /** Screen-space picking: the nearest body whose disk or marker is under the pointer. */
-  pick(clientX: number, clientY: number): string | null {
+  pick(clientX: number, clientY: number, touch = false): string | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
@@ -404,22 +469,26 @@ export class Engine {
     for (const [id, s] of this.screen) {
       if (!s.front) continue;
       const d = Math.hypot(s.x - x, s.y - y);
-      const hit = Math.max(s.px, 9);
+      const hit = Math.max(s.px, touch ? TOUCH_SLOP : 9);
       if (d > hit) continue;
       // Prefer bodies whose disk actually covers the pointer, then the closest one.
-      const score = (d <= s.px ? 0 : 1e6) + s.dist;
+      let score = (d <= s.px ? 0 : 1e6) + s.dist;
+      // A finger near a cluster of markers means the nearest on screen, with planets ahead of their moons.
+      if (touch && d > s.px) score = 1e30 + d + KIND_PRIORITY[this.system.get(id)!.def.kind] * 0.25;
       if (score < bestScore) {
         bestScore = score;
         best = id;
       }
     }
-    return best;
+    return best ?? (touch ? this.labels.hit(x, y) : null);
   }
 
   // ─────────────────────────────────────────────────────────── frame
 
   private frame(now: number) {
-    const dt = Math.min(0.1, (now - this.lastTime) / 1000);
+    const frameMs = now - this.lastTime;
+    if (MOBILE && frameMs < MOBILE_FRAME_MS) return;
+    const dt = Math.min(0.1, frameMs / 1000);
     this.lastTime = now;
     this.frames++;
     this.elapsed += dt;
@@ -534,6 +603,7 @@ export class Engine {
     }
 
     this.pipeline.render();
+    if (this.governor?.sample(frameMs)) this.applyPixelRatio();
 
     this.telemetryClock += dt;
     if (this.telemetryClock > 0.1) {

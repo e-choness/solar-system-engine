@@ -1,7 +1,7 @@
 // Downloads open-licensed textures, recordings and the bright-star catalog,
 // optimises them, and records attribution in src/data/generated/credits.json.
 //
-// Run in Docker: docker compose run --rm node npm run assets [textures|audio|stars] [texture ids…]
+// Run in Docker: docker compose run --rm node npm run assets [textures|audio|stars|mid] [texture ids…]
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,6 +12,9 @@ const TEX = path.resolve('public/textures');
 const AUDIO = path.resolve('public/audio/recordings');
 const DATA = path.resolve('public/data');
 const CREDITS = path.resolve('src/data/generated/credits.json');
+const MID_LIST = path.resolve('src/data/generated/mid-textures.json');
+/** Long edge of the tier phones stream instead of the full-resolution map. */
+const MID_SIZE = 2048;
 const UA = { 'User-Agent': 'solar-system-engine asset pipeline (https://github.com/e-choness/solar-system-engine)' };
 
 const SSS = 'https://www.solarsystemscope.com/textures/download/';
@@ -23,7 +26,8 @@ const USGS = 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/';
  * id → source: Solar System Scope (`sss`), Wikimedia Commons titles tried in
  * order (`commons`), or a direct download (`url` + `credit`). `size` is the
  * long edge of the high-res variant; every texture also gets a 1024 px `.lo`
- * variant that loads first. `match` scales a map so its mean color equals the
+ * variant that loads first, and maps wider than MID_SIZE a `.mid` variant for
+ * phones. `match` scales a map so its mean color equals the
  * body's catalog color (for greyscale or albedo maps).
  */
 const TEXTURES = {
@@ -45,7 +49,8 @@ const TEXTURES = {
   eris: { sss: '4k_eris_fictional.jpg', size: 2048, impression: true },
   haumea: { sss: '4k_haumea_fictional.jpg', size: 2048, impression: true },
   makemake: { sss: '4k_makemake_fictional.jpg', size: 2048, impression: true },
-  stars: { sss: '8k_stars_milky_way.jpg', size: 8192, quality: 82 },
+  // Nothing streams the sky past its `.lo` tier, so it needs no `.mid`.
+  stars: { sss: '8k_stars_milky_way.jpg', size: 8192, quality: 82, mid: false },
 
   ceres: {
     // Dawn Framing Camera, 140 m/px; centred on 180° E.
@@ -180,14 +185,40 @@ async function matchColor(raw, hex) {
   return sharp(out.data, { raw: out.info, limitInputPixels: false });
 }
 
+const webp = (img, spec) => img.webp({ quality: spec.quality ?? 86, alphaQuality: 90, effort: 5 });
+
+/** Derives the phone tier from the shipped high-res map; nothing to do for maps already this small. */
+async function writeMid(id, spec) {
+  const hi = path.join(TEX, `${id}.webp`);
+  const { width, height } = await sharp(hi).metadata();
+  if (spec.mid === false || width <= MID_SIZE) return;
+  const size = { width: MID_SIZE, height: Math.round((height * MID_SIZE) / width), fit: 'fill' };
+  await webp(sharp(hi).resize(size), spec).toFile(path.join(TEX, `${id}.mid.webp`));
+}
+
+/** The texture bank loads `.mid` only for ids in this list. */
+function writeMidList() {
+  const ids = fs
+    .readdirSync(TEX)
+    .filter((f) => f.endsWith('.mid.webp'))
+    .map((f) => f.slice(0, -'.mid.webp'.length));
+  fs.writeFileSync(
+    MID_LIST,
+    `${JSON.stringify(ids.sort(), null, 2)}
+`,
+  );
+  console.log(`mid  ${ids.length} textures have a ${MID_SIZE} px tier`);
+}
+
 async function writeTexture(id, raw, spec) {
-  const encode = (img) => img.webp({ quality: spec.quality ?? 86, alphaQuality: 90, effort: 5 });
+  const encode = (img) => webp(img, spec);
   const base = spec.match ? await matchColor(raw, spec.match) : sharp(raw, { limitInputPixels: false });
   const prep = (img) => (spec.grey ? img.greyscale() : img);
   if (spec.strip) {
     // Ring strips keep their aspect ratio and alpha channel.
     await encode(prep(base.clone()).resize({ width: spec.size })).toFile(path.join(TEX, `${id}.webp`));
     await encode(prep(base.clone()).resize({ width: 1024 })).toFile(path.join(TEX, `${id}.lo.webp`));
+    await writeMid(id, spec);
     return;
   }
   // Planet maps are forced to an exact 2:1 equirectangular frame.
@@ -198,6 +229,7 @@ async function writeTexture(id, raw, spec) {
       .resize(hi, hi / 2, { fit: 'fill' }),
   ).toFile(path.join(TEX, `${id}.webp`));
   await encode(prep(base.clone()).removeAlpha().resize(1024, 512, { fit: 'fill' })).toFile(path.join(TEX, `${id}.lo.webp`));
+  await writeMid(id, spec);
 }
 
 async function textures(credits, ids) {
@@ -233,6 +265,7 @@ async function textures(credits, ids) {
     const kb = (fs.statSync(path.join(TEX, `${id}.webp`)).size / 1024) | 0;
     console.log(`tex  ${id.padEnd(18)} ${String(kb).padStart(6)} KB  ${source.credit.license}  ← ${source.credit.title}`);
   }
+  writeMidList();
 }
 
 async function recordings(credits) {
@@ -295,6 +328,11 @@ const only = process.argv[2];
 if (!only || only === 'textures') await textures(credits, process.argv.slice(3));
 if (!only || only === 'audio') await recordings(credits);
 if (!only || only === 'stars') await stars(credits);
+if (only === 'mid') {
+  // Backfills the phone tier from the shipped maps without touching the sources.
+  for (const [id, spec] of Object.entries(TEXTURES)) await writeMid(id, spec);
+  writeMidList();
+}
 
 const previous = fs.existsSync(CREDITS) ? JSON.parse(fs.readFileSync(CREDITS, 'utf8')) : {};
 const merged = {

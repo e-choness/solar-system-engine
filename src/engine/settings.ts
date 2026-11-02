@@ -1,3 +1,5 @@
+import { MOBILE } from './device.ts';
+
 export type Quality = 'low' | 'medium' | 'high' | 'ultra';
 
 export interface Settings {
@@ -18,7 +20,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  quality: 'high',
+  quality: MOBILE ? 'medium' : 'high',
   orbits: true,
   labels: true,
   belts: true,
@@ -46,7 +48,10 @@ const KEY = 'solar-system.settings.v2';
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS };
+    const saved: Settings = raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS };
+    // Ultra streams every world at full resolution, more than a phone can hold.
+    if (MOBILE && saved.quality === 'ultra') saved.quality = 'high';
+    return saved;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

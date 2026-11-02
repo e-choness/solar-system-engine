@@ -148,8 +148,9 @@
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: min(820px, calc(100vw - 28px));
+    width: min(820px, calc(100vw - 28px - var(--safe-l) - var(--safe-r)));
     height: min(760px, calc(100vh - 40px));
+    height: min(760px, calc(100dvh - 40px - var(--safe-t) - var(--safe-b)));
     display: flex;
     flex-direction: column;
     z-index: 40;
@@ -272,6 +273,13 @@
     .who {
       grid-column: 1 / -1;
       grid-row: 2;
+    }
+    .content {
+      min-height: 0;
+      padding: 6px 16px 20px;
+    }
+    header {
+      padding-left: 16px;
     }
   }
 </style>

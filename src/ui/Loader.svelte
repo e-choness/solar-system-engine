@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Headphones, Rocket } from '@lucide/svelte';
+  import { Headphones, Rocket, RotateCw } from '@lucide/svelte';
   import { app } from './state.svelte.ts';
 
   let { onbegin }: { onbegin: () => void } = $props();
@@ -28,6 +28,12 @@
         <Rocket size={18} /> Begin the journey
       </button>
       <div class="hint"><Headphones size={14} /> Best with headphones · sounds of every world</div>
+    {:else if app.stage === 'error' && app.lost}
+      <div class="error glass">
+        <strong>The graphics context was lost.</strong>
+        <p class="dim">The browser reclaimed the GPU, which often happens after switching apps. Reloading brings everything back.</p>
+        <button class="pill-btn primary reload" onclick={() => location.reload()}><RotateCw size={15} /> Reload</button>
+      </div>
     {:else if app.stage === 'error'}
       <div class="error glass">
         <strong>The engine could not start.</strong>
@@ -170,13 +176,51 @@
     color: var(--text-dim);
     font-family: var(--font-ui);
   }
+  .reload {
+    margin-top: 12px;
+  }
   footer {
     position: absolute;
-    bottom: 18px;
+    bottom: calc(18px + var(--safe-b));
     display: flex;
     gap: 6px;
     font-size: 11.5px;
     color: var(--text-faint);
     letter-spacing: 0.04em;
+  }
+  @media (pointer: coarse) {
+    .vignette {
+      backdrop-filter: none;
+    }
+  }
+  @media (max-width: 420px) {
+    .eyebrow {
+      letter-spacing: 0.3em;
+      font-size: 11px;
+    }
+  }
+  @media (max-height: 520px) {
+    .hero {
+      padding: 8px 24px 36px;
+    }
+    h1 {
+      margin: 6px 0;
+      font-size: clamp(36px, 15vh, 64px);
+    }
+    .tag {
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .begin {
+      padding: 10px 24px;
+    }
+    .hint {
+      margin-top: 8px;
+      display: flex;
+      justify-content: center;
+    }
+    footer {
+      bottom: calc(6px + var(--safe-b));
+    }
   }
 </style>
