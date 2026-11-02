@@ -410,7 +410,7 @@
     margin: 0;
     line-height: 1.5;
   }
-  @media (max-width: 760px), (max-height: 520px) {
+  @media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 900px) {
     .info.expanded {
       height: 72vh;
       height: 72dvh;
@@ -452,9 +452,23 @@
     .more {
       margin-left: auto;
     }
+    .actions .icon-btn {
+      flex: none;
+    }
     .body {
       min-height: 0;
       padding: 12px 16px 16px;
+    }
+  }
+  @media (max-width: 345px) {
+    .actions {
+      gap: 2px;
+    }
+    .actions .pill-btn {
+      padding: 8px;
+    }
+    .here {
+      padding: 0;
     }
   }
   @media (max-height: 520px) and (orientation: landscape) {

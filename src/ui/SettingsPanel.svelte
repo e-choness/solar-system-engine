@@ -259,7 +259,7 @@
       display: none;
     }
   }
-  @media (max-width: 760px), (max-height: 520px) {
+  @media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 900px) {
     header {
       padding-top: 0;
     }

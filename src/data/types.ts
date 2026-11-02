@@ -22,6 +22,8 @@ export interface Rotation {
 export interface Atmosphere {
   /** Scattering color (sRGB hex). */
   color: string;
+  /** Color of the upper haze, where it differs from the lower atmosphere (Mars's ice clouds above its dust). */
+  high?: string;
   /** Sunset / terminator tint. */
   sunset?: string;
   /** Shell thickness relative to body radius. */

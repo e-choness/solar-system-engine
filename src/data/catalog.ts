@@ -54,7 +54,7 @@ export const CATALOG: BodyDef[] = [
       atmosphere: 'Trace exosphere (O, Na, H, He, K)',
     },
     rotation: { ra: 281.0103, dec: 61.4155, w0: 329.5988, wDot: 6.1385108 },
-    visual: { map: 'mercury', color: '#9c948c' },
+    visual: { map: 'mercury', color: '#9e9484' },
     audio: orig('mercury', plasma),
     discovered: 'Known since antiquity',
     missions: ['Mariner 10', 'MESSENGER', 'BepiColombo'],
@@ -81,8 +81,8 @@ export const CATALOG: BodyDef[] = [
     rotation: { ra: 272.76, dec: 67.16, w0: 160.2, wDot: -1.4813688 },
     visual: {
       map: 'venus-atmosphere',
-      color: '#e8d2a0',
-      atmosphere: { color: '#f2d9a0', sunset: '#d08840', height: 0.035, density: 0.85 },
+      color: '#d6d4ce',
+      atmosphere: { color: '#dddbd5', sunset: '#d08840', height: 0.035, density: 0.85 },
     },
     audio: orig('venus', plasma),
     discovered: 'Known since antiquity',
@@ -146,17 +146,20 @@ export const CATALOG: BodyDef[] = [
     rotation: { ra: 317.68143, dec: 52.8865, w0: 176.63, wDot: 350.89198226 },
     visual: {
       map: 'mars',
-      color: '#c1623b',
-      // Suspended dust scatters red-orange. (The famous blue sunsets are seen from the ground, looking toward the Sun.)
-      atmosphere: { color: '#d8704a', sunset: '#9a3a1e', height: 0.02, density: 0.45 },
+      color: '#927859',
+      // Butterscotch dust low down, bluish-white water-ice haze above it (Mars Express HRSC limb images).
+      // Dust scatters blue light forward, so looking toward the Sun across the terminator shows the blue
+      // of Curiosity's sunsets (PIA19400).
+      atmosphere: { color: '#a58865', high: '#838e9c', sunset: '#7b8fa5', height: 0.02, density: 0.45 },
     },
     audio: orig('mars', plasma),
     discovered: 'Known since antiquity',
     missions: ['Viking 1 & 2', 'Mars Reconnaissance Orbiter', 'Curiosity', 'Perseverance', 'Ingenuity', 'Tianwen-1'],
     description:
-      'A cold desert world rusted red by iron oxide. Mars hosts Olympus Mons, the tallest volcano in the solar system, and Valles Marineris, a canyon as long as the United States is wide. Dry riverbeds and lake deltas show that water once flowed across its surface.',
+      'A cold desert world whose dust is rusted by iron oxide. Mars hosts Olympus Mons, the tallest volcano in the solar system, and Valles Marineris, a canyon as long as the United States is wide. Dry riverbeds and lake deltas show that water once flowed across its surface.',
     facts: [
       'Sunsets on Mars are blue, because fine dust scatters red light away from the Sun’s direction.',
+      'In true color Mars is a dusty butterscotch brown; the deep red of many pictures comes from enhanced color.',
       'Perseverance is caching rock samples for a future return to Earth.',
     ],
     wiki: wiki('Mars'),
@@ -180,8 +183,8 @@ export const CATALOG: BodyDef[] = [
     rotation: { ra: 268.056595, dec: 64.495303, w0: 284.95, wDot: 870.536 },
     visual: {
       map: 'jupiter',
-      color: '#d4b48c',
-      atmosphere: { color: '#e0cfa8', height: 0.012, density: 0.35 },
+      color: '#bcb9ad',
+      atmosphere: { color: '#d3d1c3', height: 0.012, density: 0.35 },
       rings: { inner: 92000, outer: 129000, color: '#9a8468', opacity: 0.06 },
     },
     audio: orig('jupiter', plasma),
@@ -214,8 +217,8 @@ export const CATALOG: BodyDef[] = [
     rotation: { ra: 40.589, dec: 83.537, w0: 38.9, wDot: 810.7939024 },
     visual: {
       map: 'saturn',
-      color: '#e3cf9d',
-      atmosphere: { color: '#ecdcac', height: 0.012, density: 0.35 },
+      color: '#e3cdb2',
+      atmosphere: { color: '#f0d9bc', height: 0.012, density: 0.35 },
       rings: { inner: 74500, outer: 140220, texture: 'saturn-ring', color: '#d8c8a4', opacity: 1 },
     },
     audio: orig('saturn', plasma),
@@ -245,8 +248,8 @@ export const CATALOG: BodyDef[] = [
     rotation: { ra: 257.311, dec: -15.175, w0: 203.81, wDot: -501.1600928 },
     visual: {
       map: 'uranus',
-      color: '#a6dde6',
-      atmosphere: { color: '#a8eef5', height: 0.02, density: 0.55 },
+      color: '#b2dae9',
+      atmosphere: { color: '#bee9f9', height: 0.02, density: 0.55 },
       // Voyager 2 / Keck: thirteen narrow, dark rings; ε is the widest (20–96 km) and most opaque.
       rings: {
         inner: 41000,
@@ -294,8 +297,9 @@ export const CATALOG: BodyDef[] = [
     rotation: { ra: 299.36, dec: 43.46, w0: 249.978, wDot: 541.1397757 },
     visual: {
       map: 'neptune',
-      color: '#4b70dd',
-      atmosphere: { color: '#5c8cff', height: 0.02, density: 0.6 },
+      // Nearly as pale as Uranus (Irwin et al. 2024), not the deep blue of contrast-enhanced Voyager 2 images.
+      color: '#a6d2e9',
+      atmosphere: { color: '#b2e1f9', height: 0.02, density: 0.6 },
       // Voyager 2: faint dusty rings, Adams the brightest, Galle and Lassell broad sheets.
       rings: {
         inner: 40500,
@@ -316,7 +320,11 @@ export const CATALOG: BodyDef[] = [
     missions: ['Voyager 2'],
     description:
       'The windiest world known, with supersonic gusts of up to 2,100 km/h. Neptune was found by mathematics before it was seen: its position was predicted from tiny tugs on the orbit of Uranus. It takes 165 years to orbit the Sun once.',
-    facts: ['Neptune completed its first orbit since discovery in 2011.', 'It radiates 2.6 times more heat than it receives from the Sun.'],
+    facts: [
+      'Neptune completed its first orbit since discovery in 2011.',
+      'It radiates 2.6 times more heat than it receives from the Sun.',
+      'Measured in true color it is a pale greenish blue much like Uranus; its famous deep blue came from Voyager 2 images processed to bring out detail.',
+    ],
     wiki: wiki('Neptune'),
   },
 
@@ -600,7 +608,8 @@ export const CATALOG: BodyDef[] = [
       mapLonOffset: 180,
       color: '#d89a48',
       accent: '#e8b060',
-      atmosphere: { color: '#e09a40', sunset: '#8a5020', height: 0.2, density: 1 },
+      // The detached upper haze shows blue-violet at the limb in Cassini's natural-color views (PIA06089).
+      atmosphere: { color: '#e09a40', high: '#ae9ded', sunset: '#8a5020', height: 0.2, density: 1 },
     },
     audio: son,
     discovered: '1655 — Christiaan Huygens',

@@ -339,7 +339,7 @@
   .menu button:active {
     background: rgba(255, 255, 255, 0.1);
   }
-  @media (max-width: 760px), (max-height: 520px) {
+  @media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 900px) {
     .bar {
       top: calc(8px + var(--safe-t));
       left: calc(8px + var(--safe-l));

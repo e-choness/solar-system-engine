@@ -37,7 +37,7 @@
     border-color: rgba(255, 190, 110, 0.4);
     color: #ffe0b0;
   }
-  @media (max-width: 760px), (max-height: 520px) {
+  @media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 900px) {
     .toasts {
       top: var(--dock-top);
       width: max-content;

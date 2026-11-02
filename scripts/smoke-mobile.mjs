@@ -4,15 +4,32 @@
 //
 // Run in Docker: docker compose up -d dev && docker compose run --rm browser npm run smoke:mobile [webgl|webgpu] [device…]
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { chromium, devices } from 'playwright';
+import { offscreenCanvas, WEBGPU_FLAGS } from './webgpu-offscreen.mjs';
 
-const URL = process.env.APP_URL ?? 'http://localhost:5173';
 const OUT = path.resolve('.cache/smoke-mobile');
 const args = process.argv.slice(2);
 const backend = args.includes('webgpu') ? 'webgpu' : 'webgl';
 const only = args.filter((a) => a !== 'webgl' && a !== 'webgpu');
 fs.mkdirSync(OUT, { recursive: true });
+
+// WebGPU only exists on secure origins. The dev server's Docker hostname isn't one but localhost
+// is, so WebGPU runs reach it through a local forwarder, or the app silently falls back to WebGL.
+let URL = process.env.APP_URL ?? 'http://localhost:5173';
+let forwarder = null;
+if (backend === 'webgpu' && !URL.includes('localhost')) {
+  const { hostname, port } = new globalThis.URL(URL);
+  forwarder = net.createServer((client) => {
+    const server = net.connect(Number(port), hostname);
+    client.pipe(server).pipe(client);
+    client.on('error', () => server.destroy());
+    server.on('error', () => client.destroy());
+  });
+  await new Promise((done) => forwarder.listen(5180, '127.0.0.1', done));
+  URL = 'http://localhost:5180';
+}
 
 const iphone = devices['iPhone 14'];
 const pixel = devices['Pixel 7'];
@@ -24,15 +41,16 @@ const DEVICES = {
   'android-portrait': profile(pixel, 360, 780),
   'small-phone': profile(iphone, 320, 568, { deviceScaleFactor: 2 }),
   tablet: profile(ipad, 820, 1180),
+  'tablet-landscape': profile(ipad, 1180, 820),
 };
 
-const browser = await chromium.launch({
-  args:
-    backend === 'webgpu'
-      ? ['--enable-unsafe-webgpu', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--ignore-gpu-blocklist']
-      : ['--ignore-gpu-blocklist', '--use-gl=angle', '--use-angle=gl-egl'],
-  env: { ...process.env, EGL_PLATFORM: 'surfaceless' },
-});
+// A fresh browser per device: software WebGPU can hang the next page after a context closes.
+const launch = () =>
+  chromium.launch({
+    args: backend === 'webgpu' ? WEBGPU_FLAGS : ['--ignore-gpu-blocklist', '--use-gl=angle', '--use-angle=gl-egl'],
+    env: { ...process.env, EGL_PLATFORM: 'surfaceless' },
+  });
+let browser = null;
 
 let failed = 0;
 const check = (name, ok, detail = '') => {
@@ -45,6 +63,7 @@ async function run(name, device) {
   const { defaultBrowserType: _, ...options } = device;
   const context = await browser.newContext(options);
   const page = await context.newPage();
+  if (backend === 'webgpu') await page.addInitScript(offscreenCanvas);
   const errors = [];
   const requests = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -55,13 +74,42 @@ async function run(name, device) {
   const shot = (label) => page.screenshot({ path: path.join(OUT, `${name}-${label}.png`) });
   const wait = (ms) => page.waitForTimeout(ms);
   const solar = (fn, arg) => page.evaluate(fn, arg);
+  /** Waits for real frames: on software WebGPU one frame can outlast any fixed delay. */
+  const frames = (n) =>
+    page.evaluate(
+      (n) =>
+        new Promise((done) => {
+          const tick = () => (n-- > 0 ? requestAnimationFrame(tick) : done());
+          tick();
+        }),
+      n,
+    );
+  /** Waits for panel animations to end, so measurements see where a panel rests. */
+  const calm = async () => {
+    await page.evaluate(() =>
+      Promise.allSettled(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getComputedTiming().iterations !== Number.POSITIVE_INFINITY)
+          .map((a) => a.finished),
+      ),
+    );
+    await frames(2);
+  };
+  const until = (fn, timeout = 8000) =>
+    page.waitForFunction(fn, null, { timeout }).then(
+      () => true,
+      () => false,
+    );
   const settled = () => page.waitForFunction(() => !window.__solar.engine.rig.flying, null, { timeout: 60_000 });
 
   // Real touch input, so the browser's own gesture handling takes part.
-  const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y], id) => ({ x, y, id })) });
-  const tap = async (x, y) => {
-    await touch('touchStart', [[x, y]]);
-    await touch('touchEnd', []);
+  const touch = (type, points, timestamp) =>
+    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y], id) => ({ x, y, id })), timestamp });
+  // Explicit timestamps give a finger's timing, whatever the frame rate. They are seconds since the epoch.
+  const tap = async (x, y, at = Date.now() / 1000) => {
+    await touch('touchStart', [[x, y]], at);
+    await touch('touchEnd', [], at + 0.06);
   };
   const drag = async (from, to, steps = 8) => {
     await touch('touchStart', [from]);
@@ -88,8 +136,9 @@ async function run(name, device) {
   const screenOf = (id) => solar((id) => window.__solar.engine.screen.get(id), id);
 
   /** Checks that the open interface fits the screen and nothing covers anything else. */
-  const fits = (label) =>
-    solar(() => {
+  const fits = async (label) => {
+    await calm();
+    const r = await solar(() => {
       const vw = innerWidth;
       const vh = innerHeight;
       const rect = (el) => el.getBoundingClientRect();
@@ -117,16 +166,18 @@ async function run(name, device) {
         .filter((el) => rect(el).height < 40 || rect(el).width < 34)
         .map((el) => `${name(el)} ${rect(el).width | 0}x${rect(el).height | 0}`);
       return { offscreen, overlaps, tiny };
-    }).then((r) => {
-      check(`${label}: nothing off screen`, r.offscreen.length === 0, r.offscreen.join(', '));
-      check(`${label}: panels don't overlap`, r.overlaps.length === 0, r.overlaps.join(', '));
-      check(`${label}: touch targets large enough`, r.tiny.length === 0, r.tiny.join(', '));
     });
+    check(`${label}: nothing off screen`, r.offscreen.length === 0, r.offscreen.join(', '));
+    check(`${label}: panels don't overlap`, r.overlaps.length === 0, r.overlaps.join(', '));
+    check(`${label}: touch targets large enough`, r.tiny.length === 0, r.tiny.join(', '));
+  };
 
-  await page.goto(URL, { waitUntil: 'domcontentloaded' });
+  // The dev server can be slow to hand out its modules, especially through a Docker bind mount.
+  await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 180_000 });
   await page.waitForFunction(() => ['title', 'error'].includes(window.__solar?.app.stage), null, { timeout: 180_000 });
   const stage = await solar(() => [window.__solar.app.stage, window.__solar.app.error, window.__solar.engine.backend]);
   check('boots to the title screen', stage[0] === 'title', `${stage[2]}${stage[1] ? ` ${stage[1]}` : ''}`);
+  check('runs on the requested backend', stage[2] === (backend === 'webgpu' ? 'WebGPU' : 'WebGL 2'), stage[2]);
   if (stage[0] !== 'title') {
     await shot('failure');
     await context.close();
@@ -167,17 +218,30 @@ async function run(name, device) {
   let after = await pose();
   check('drag orbits the camera', Math.abs(after.yaw - before.yaw) > 0.1, `Δyaw ${(after.yaw - before.yaw).toFixed(2)}`);
 
+  // Pinch in the open scene: beside the details card when it shares the row, as on landscape phones.
+  const pinchAt = await solar(() => {
+    const y = innerHeight * 0.45;
+    const card = document.querySelector('.info')?.getBoundingClientRect();
+    return [(card && card.top < y + 20 && card.bottom > y - 20 ? card.left : innerWidth) / 2, y];
+  });
   before = after;
-  await pinch([w / 2, h * 0.45], 40, 110);
+  await pinch(pinchAt, 40, 110);
   await wait(900);
   after = await pose();
   check('pinch out zooms in', after.d < before.d * 0.7, `${(before.d / after.d).toFixed(2)}×`);
   check('pinch does not reselect', (await solar(() => window.__solar.app.selectedId)) === 'earth');
   before = after;
-  await pinch([w / 2, h * 0.45], 110, 40);
+  await pinch(pinchAt, 110, 40);
   await wait(900);
   after = await pose();
   check('pinch in zooms out', after.d > before.d * 1.4, `${(after.d / before.d).toFixed(2)}×`);
+
+  // A pinch on a panel must not zoom the page: nothing would bring the layout back.
+  const panel = await page.locator('.info').boundingBox();
+  await pinch([panel.x + panel.width / 2, panel.y + panel.height / 2], 20, 70);
+  await wait(600);
+  const pageScale = await solar(() => visualViewport.scale);
+  check('pinching a panel leaves the page alone', pageScale === 1, `scale ${pageScale.toFixed(2)}`);
 
   // Selecting: a tap on empty space clears, a tap beside a marker still hits it.
   await solar(() => window.__solar.engine.focus('sun', { instant: true }));
@@ -187,27 +251,19 @@ async function run(name, device) {
     engine.rig.jumpTo(engine.get('sun'), 5 * 149597870.7);
     engine.select(null);
   });
-  await wait(500);
+  await frames(3); // Picking reads the positions of the last rendered frame.
   const sun = await screenOf('sun');
   await tap(sun.x + 14, sun.y + 10);
-  await wait(400);
-  check('a tap near a marker selects it', (await solar(() => window.__solar.app.selectedId)) === 'sun');
+  check('a tap near a marker selects it', await until(() => window.__solar.app.selectedId === 'sun'));
   await solar(() => window.__solar.engine.select(null));
 
-  const jupiter = await solar(() => {
-    const { engine } = window.__solar;
-    return engine.screen.get('jupiter');
-  });
-  if (jupiter.front && jupiter.x > 20 && jupiter.x < w - 20 && jupiter.y > 90 && jupiter.y < h - 90) {
-    await tap(jupiter.x, jupiter.y);
-    await wait(120);
-    await tap(jupiter.x, jupiter.y);
-    await wait(500);
-    const flown = await solar(() => ({ selected: window.__solar.app.selectedId, flying: window.__solar.engine.rig.flying }));
-    check('double-tap flies to a world', flown.selected === 'jupiter' && flown.flying, JSON.stringify(flown));
-  } else {
-    await solar(() => window.__solar.engine.focus('jupiter', { instant: true }));
-  }
+  // The Sun is at screen centre, clear of the card the first tap opens.
+  const at = Date.now() / 1000;
+  await tap(sun.x, sun.y, at);
+  await tap(sun.x, sun.y, at + 0.2);
+  check('double-tap flies to a world', await until(() => window.__solar.engine.rig.flying));
+  await settled();
+  await solar(() => window.__solar.engine.focus('jupiter', { instant: true }));
   await settled();
   await wait(1500);
   await shot('3-jupiter');
@@ -224,7 +280,9 @@ async function run(name, device) {
   );
   await page.locator('.browser .item', { hasText: 'Saturn' }).tap();
   await wait(400);
-  check('picking a world closes the browser', (await solar(() => window.__solar.app.browserOpen)) === false);
+  const compact = await solar(() => window.__solar.app.compact);
+  if (compact) check('picking a world closes the browser', (await solar(() => window.__solar.app.browserOpen)) === false);
+  else await button('Toggle body browser').tap();
   await settled();
   await wait(1800);
   await shot('5-saturn');
@@ -233,7 +291,9 @@ async function run(name, device) {
   check('Saturn’s rings fit the screen', ringPx < Math.min(w, h) * 1.02, `${Math.round(ringPx)}px`);
 
   // Expanding the details by swiping the handle, then swiping back.
-  if (name !== 'iphone-landscape') {
+  if (!compact) {
+    await fits('details beside the scene');
+  } else if (name !== 'iphone-landscape') {
     const grab = await page.locator('.info .grab').boundingBox();
     if (grab) {
       await drag([grab.x + grab.width / 2, grab.y + 10], [grab.x + grab.width / 2, grab.y - 110]);
@@ -254,7 +314,7 @@ async function run(name, device) {
     await button('Show less').last().tap();
   }
 
-  if (await solar(() => window.__solar.app.compact)) {
+  if (compact) {
     const menu = async (item) => {
       await button('Menu').tap();
       await wait(350);
@@ -274,8 +334,8 @@ async function run(name, device) {
     await fits('time travel');
     await shot('9-events');
     await tap(w / 2, 76); // Just below the top bar: sheets always leave this band of scene free.
-    await wait(500);
-    check('tapping the scene closes a sheet', (await solar(() => window.__solar.app.eventsOpen)) === false);
+    check('tapping the scene closes a sheet', await until(() => window.__solar.app.eventsOpen === false));
+    await calm();
     await menu('Controls');
     await shot('10-help');
     await button('Close').last().tap();
@@ -320,8 +380,11 @@ async function run(name, device) {
     !fullSize.some((u) => hasMid.has(u)) && !fullSize.some((u) => /^(earth|moon|jupiter|saturn)\.webp$/.test(u)),
     fullSize.join(' '),
   );
-  const state = await solar(() => ({ ratio: window.__solar.engine.renderer.getPixelRatio(), fps: window.__solar.app.telemetry?.fps }));
-  console.log(`  ..   pixel ratio ${state.ratio.toFixed(2)}, ${state.fps?.toFixed(0)} fps on software rendering`);
+  const started = Date.now();
+  await frames(10);
+  const frameMs = (Date.now() - started) / 10;
+  const ratio = await solar(() => window.__solar.engine.renderer.getPixelRatio());
+  console.log(`  ..   ${stage[2]}, pixel ratio ${ratio.toFixed(2)}, ${frameMs.toFixed(0)} ms a frame on software rendering`);
 
   // ── lifecycle
   await page.evaluate(() => {
@@ -349,13 +412,19 @@ async function run(name, device) {
   await context.close();
 }
 
-try {
-  for (const [name, device] of Object.entries(DEVICES)) if (!only.length || only.includes(name)) await run(name, device);
-} catch (err) {
-  failed++;
-  console.error('smoke failed:', err.message);
-} finally {
-  await browser.close();
+for (const [name, device] of Object.entries(DEVICES)) {
+  if (only.length && !only.includes(name)) continue;
+  browser = await launch();
+  try {
+    await run(name, device);
+  } catch (err) {
+    // One device failing outright shouldn't hide the results of the rest.
+    failed++;
+    console.error(`  FAIL ${name} stopped: ${err.message.split('\n')[0]}`);
+  } finally {
+    await browser.close().catch(() => {});
+  }
 }
+forwarder?.close();
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
 process.exit(failed ? 1 : 0);
