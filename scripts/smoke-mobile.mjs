@@ -368,17 +368,25 @@ async function run(name, device) {
   await settled();
   await wait(2000);
   const urls = requests.filter((u) => u.includes('/textures/')).map((u) => u.split('/').pop().split('?')[0]);
-  const fullSize = urls.filter((u) => !/\.(lo|mid)\.webp$/.test(u));
-  const hasMid = new Set(urls.filter((u) => u.endsWith('.mid.webp')).map((u) => u.replace('.mid', '')));
+  const tier = (u) => u.match(/\.(lo|mid)\.(webp|ktx2)$/)?.[1] ?? 'hi';
+  const idOf = (u) => u.split('.')[0];
+  const fullSize = urls.filter((u) => tier(u) === 'hi');
+  const hasMid = new Set(urls.filter((u) => tier(u) === 'mid').map(idOf));
   check(
     'streams the phone tier',
-    urls.some((u) => u === 'earth.mid.webp'),
-    `${urls.filter((u) => u.includes('.mid.')).length} mid maps`,
+    urls.some((u) => /^earth\.mid\.(webp|ktx2)$/.test(u)),
+    `${urls.filter((u) => tier(u) === 'mid').length} mid maps`,
   );
   check(
     'no 4K map downloaded',
-    !fullSize.some((u) => hasMid.has(u)) && !fullSize.some((u) => /^(earth|moon|jupiter|saturn)\.webp$/.test(u)),
+    !fullSize.some((u) => hasMid.has(idOf(u))) && !fullSize.some((u) => /^(earth|moon|jupiter|saturn)\.webp$/.test(u)),
     fullSize.join(' '),
+  );
+  const compressed = urls.filter((u) => u.endsWith('.ktx2'));
+  check(
+    'maps stay compressed on the GPU',
+    (await solar(() => window.__solar.engine.bank.compressed)) && compressed.some((u) => u === 'earth.mid.ktx2'),
+    `${compressed.length} of ${urls.length} maps as KTX2`,
   );
   const started = Date.now();
   await frames(10);

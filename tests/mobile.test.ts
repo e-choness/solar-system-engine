@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { graphicsAdvice, isAppleMobile, isMobileDevice, preferredBackend, requestedBackend } from '../src/engine/device.ts';
 import { ResolutionGovernor } from '../src/engine/governor.ts';
-import { TextureBank } from '../src/engine/textures.ts';
+import { TextureBank, type TextureBudget } from '../src/engine/textures.ts';
 
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1';
 const PIXEL = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126.0 Mobile Safari/537.36';
@@ -177,5 +177,50 @@ describe('TextureBank under a budget', () => {
     await b.upgrade('moon');
     expect(b.evicts).toBe(false);
     expect(b.isHigh('moon')).toBe(true);
+  });
+});
+
+describe('TextureBank with KTX2', () => {
+  function bank(budget?: TextureBudget, ktx2Fails = false) {
+    const files: string[] = [];
+    const b = new TextureBank(undefined, budget);
+    const fake = (compressed: boolean) => ({
+      loadAsync: async (url: string) => {
+        files.push(url.split('/').pop()!);
+        if (compressed && ktx2Fails) throw new Error('WebAssembly is unavailable');
+        return compressed ? new THREE.CompressedTexture([], 4, 4) : new THREE.Texture();
+      },
+    });
+    Object.assign(b as any, { loader: fake(false), ktx2: fake(true) });
+    return { b, files };
+  }
+
+  it('preloads the compressed far tier and streams the compressed phone tier', async () => {
+    const { b, files } = bank({ mid: true, keep: 4 });
+    await b.preload(['earth', 'uranus']);
+    await Promise.all([b.upgrade('earth'), b.upgrade('uranus')]);
+    // Uranus has no 2048 px WebP (its full map is that size), but it has a compressed one.
+    expect(files.sort()).toEqual(['earth.lo.ktx2', 'earth.mid.ktx2', 'uranus.lo.ktx2', 'uranus.mid.ktx2']);
+    // The GPU can't build mipmaps for block-compressed data; the file brings its own.
+    expect(b.get('earth').generateMipmaps).toBe(false);
+  });
+
+  it('keeps the full-resolution WebP for close-ups on desktop', async () => {
+    const { b, files } = bank();
+    await b.preload(['earth']);
+    await b.upgrade('earth');
+    expect(files).toEqual(['earth.lo.ktx2', 'earth.webp']);
+    expect(b.get('earth').generateMipmaps).toBe(true);
+  });
+
+  it('falls back to WebP for the rest of the session when KTX2 fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { b, files } = bank({ mid: true, keep: 4 }, true);
+    await b.preload(['earth', 'uranus']);
+    expect(b.compressed).toBe(false);
+    await Promise.all([b.upgrade('earth'), b.upgrade('uranus')]);
+    expect(files.filter((f) => f.endsWith('.webp')).sort()).toEqual(['earth.lo.webp', 'earth.mid.webp', 'uranus.lo.webp', 'uranus.webp']);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });

@@ -60,7 +60,7 @@ Solar System stands on the work of spacecraft teams, mappers, astronomers and op
 | Bennu | [Bennu map by Askaniy (albedo).png](https://commons.wikimedia.org/wiki/File:Bennu_map_by_Askaniy_(albedo).png) | Askaniy Anpilogov, USGS | CC BY-SA 3.0 |
 | Ryugu | [Ryugu albedo map by Askaniy (enhanced).png](https://commons.wikimedia.org/wiki/File:Ryugu_albedo_map_by_Askaniy_(enhanced).png) | Askaniy Anpilogov, Yokota et al. | CC BY-SA 3.0 |
 
-Maps are resized to 2:1 equirectangular frames and re-encoded as WebP; CC BY-SA 3.0 derivatives stay under CC BY-SA 3.0.
+Maps are resized to 2:1 equirectangular frames and re-encoded as WebP, with GPU-compressed KTX2 copies of the distant and phone tiers; CC BY-SA 3.0 derivatives stay under CC BY-SA 3.0.
 
 The Mercury, Venus, Mars and Neptune maps are also recolored to the planets’ measured colors, listed under Science data.
 
@@ -104,5 +104,6 @@ Small worlds without surface imagery switch to these measured shapes up close. E
 | [@lucide/svelte](https://lucide.dev) | 1.64.0 | ISC |
 | [svelte](https://svelte.dev) | 5.57.3 | MIT |
 | [three](https://threejs.org/) | 0.186.1 | MIT |
+| [Basis Universal transcoder](https://github.com/BinomialLLC/basis_universal) (bundled with three.js) | — | Apache-2.0 |
 
-Development tools: Vite, Svelte, TypeScript, Biome, Vitest, Playwright, sharp (see `package.json`).
+Development tools: Vite, Svelte, TypeScript, Biome, Vitest, Playwright, sharp (see `package.json`), and Khronos [KTX-Software](https://github.com/KhronosGroup/KTX-Software) (Apache-2.0) to encode the KTX2 maps.
