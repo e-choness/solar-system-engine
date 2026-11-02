@@ -275,6 +275,7 @@ Everything in [`media/`](media) is generated from the live app by `npm run media
 
 <!-- auto:credits -->
 - **Surface maps:** 44 maps from Solar System Scope (CC BY 4.0), NASA/JPL/USGS (public domain) and Askaniy (CC BY-SA 3.0).
+- **Shape models:** 6 measured comet and asteroid shapes from the NASA Planetary Data System (public domain) and ESA’s Rosetta mission.
 - **Recordings:** 2 NASA Juno Waves recordings (NASA/JPL-Caltech/SwRI/University of Iowa).
 - **Data:** JPL Horizons and Standish planetary elements (NASA/JPL), IAU WGCCRE rotation models, Yale Bright Star Catalogue (via CDS VizieR).
 - **Original music and sounds:** _Solar System_ (2021) by Echo Yin.

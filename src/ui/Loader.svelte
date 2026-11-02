@@ -36,9 +36,15 @@
       </div>
     {:else if app.stage === 'error'}
       <div class="error glass">
-        <strong>The engine could not start.</strong>
-        <p>{app.error}</p>
-        <p class="dim">This experience needs a browser with WebGPU or WebGL 2 (recent Chrome, Edge, Firefox or Safari).</p>
+        {#if app.errorTitle}
+          <strong>{app.errorTitle}</strong>
+          <p class="advice">{app.errorAdvice}</p>
+          <p class="dim detail">{app.error}</p>
+        {:else}
+          <strong>The engine could not start.</strong>
+          <p>{app.error}</p>
+          <p class="dim">This experience needs a browser with WebGPU or WebGL 2 (recent Chrome, Edge, Firefox or Safari).</p>
+        {/if}
       </div>
     {/if}
   </div>
@@ -175,6 +181,18 @@
   .error p.dim {
     color: var(--text-dim);
     font-family: var(--font-ui);
+  }
+  .error p.advice {
+    max-width: 46ch;
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .error p.detail {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    overflow-wrap: anywhere;
   }
   .reload {
     margin-top: 12px;

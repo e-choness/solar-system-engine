@@ -135,6 +135,7 @@ const sections = {
 
   credits: [
     `- **Surface maps:** ${Object.keys(credits.textures).length} maps from Solar System Scope (CC BY 4.0), NASA/JPL/USGS (public domain) and Askaniy (CC BY-SA 3.0).`,
+    `- **Shape models:** ${Object.keys(credits.shapes ?? {}).length} measured comet and asteroid shapes from the NASA Planetary Data System (public domain) and ESA’s Rosetta mission.`,
     `- **Recordings:** ${Object.keys(credits.audio).length} NASA Juno Waves recordings (NASA/JPL-Caltech/SwRI/University of Iowa).`,
     '- **Data:** JPL Horizons and Standish planetary elements (NASA/JPL), IAU WGCCRE rotation models, Yale Bright Star Catalogue (via CDS VizieR).',
     '- **Original music and sounds:** _Solar System_ (2021) by Echo Yin.',
@@ -208,6 +209,18 @@ const creditsMd = [
   'Maps are resized to 2:1 equirectangular frames and re-encoded as WebP; CC BY-SA 3.0 derivatives stay under CC BY-SA 3.0.',
   '',
   'The Mercury, Venus, Mars and Neptune maps are also recolored to the planets’ measured colors, listed under Science data.',
+  '',
+  'The Sun map is an SDO/AIA 304 Å synoptic map toned to the photosphere’s color; its eruptions start from the map’s brightest active regions.',
+  '',
+  '## Shape models',
+  '',
+  '| World | Source | Author | License |',
+  '| --- | --- | --- | --- |',
+  ...Object.entries(credits.shapes ?? {}).map(
+    ([id, c]) => `| ${nameOf(id)} | [${clean(c.title)}](${c.url}) | ${clean(c.author)} | ${c.license} |`,
+  ),
+  '',
+  'Small worlds without surface imagery switch to these measured shapes up close. Each is simplified with meshoptimizer to at most 40,000 triangles.',
   '',
   '## Science data',
   '',

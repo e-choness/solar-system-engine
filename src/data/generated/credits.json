@@ -1,10 +1,10 @@
 {
   "textures": {
     "sun": {
-      "title": "8k_sun.jpg",
-      "author": "Solar System Scope (INOVE)",
-      "license": "CC BY 4.0",
-      "url": "https://www.solarsystemscope.com/textures/",
+      "title": "SDO/AIA 304 Å Carrington map, rotation 2290 (16 Oct – 13 Nov 2024)",
+      "author": "NASA/SDO and the AIA science team; map by the NASA STEREO Science Center",
+      "license": "Public domain",
+      "url": "https://stereo-ssc.nascom.nasa.gov/data/ins_data/secchi/carrmaps/aia/cm/fits/cmAIA304cr2290C0.fts.gz",
       "impression": false
     },
     "mercury": {
@@ -327,6 +327,44 @@
       "author": "Hoffleit & Warren, via CDS VizieR",
       "license": "CDS terms (free with acknowledgement)",
       "url": "https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50"
+    }
+  },
+  "shapes": {
+    "67p": {
+      "title": "SPG SHAP4S plate model, 200k plates (RO-C-MULTI-5-67P-SHAPE-V2.0)",
+      "author": "F. Preusker & F. Scholten (DLR); ESA/Rosetta/MPS for OSIRIS Team",
+      "license": "ESA Rosetta archive data, free use with credit",
+      "url": "https://pdssbn.astro.umd.edu/holdings/ro-c-multi-5-67p-shape-v2.0/"
+    },
+    "wild2": {
+      "title": "Stardust NAVCAM shape model of comet 81P/Wild 2, v2.1",
+      "author": "T. Farnham, T. Duxbury & J.-Y. Li; NASA Stardust",
+      "license": "Public domain",
+      "url": "https://pdssbn.astro.umd.edu/holdings/sdu-c-navcam-5-wild2-shape-model-v2.1/"
+    },
+    "arrokoth": {
+      "title": "New Horizons shape model of (486958) Arrokoth (Porter et al. 2024)",
+      "author": "S. B. Porter et al.; NASA/JHUAPL/SwRI New Horizons",
+      "license": "Public domain",
+      "url": "https://pdssbn.astro.umd.edu/holdings/pds4-nh_derived:arrokoth_shapemodel_porter2024-v1.0/"
+    },
+    "didymos": {
+      "title": "DART shape model of (65803) Didymos, v003 at 9.3 m (Daly et al. 2023)",
+      "author": "R. T. Daly et al.; NASA/Johns Hopkins APL DART",
+      "license": "Public domain",
+      "url": "https://pdssbn.astro.umd.edu/holdings/pds4-dart_shapemodel:data_derived_didymos_model_v003-v1.0/"
+    },
+    "tempel1": {
+      "title": "Plate shape model of comet 9P/Tempel 1, v2.0",
+      "author": "T. L. Farnham & P. C. Thomas; NASA Deep Impact",
+      "license": "Public domain",
+      "url": "https://pdssbn.astro.umd.edu/holdings/dif-c-hriv_its_mri-5-tempel1-shape-v2.0/"
+    },
+    "hartley2": {
+      "title": "Plate shape model of comet 103P/Hartley 2, v1.0",
+      "author": "T. L. Farnham & P. C. Thomas; NASA EPOXI",
+      "license": "Public domain",
+      "url": "https://pdssbn.astro.umd.edu/holdings/dif-c-hriv_mri-5-hartley2-shape-v1.0/"
     }
   }
 }

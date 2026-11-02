@@ -3,17 +3,27 @@ import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
 import { lensflare } from 'three/addons/tsl/display/LensflareNode.js';
 import { float, pass, uniform } from 'three/tsl';
 import * as THREE from 'three/webgpu';
+import sunActive from '../data/generated/sun-active.json' with { type: 'json' };
 import type { BodyKind } from '../data/types.ts';
 import { AU_KM, dateFromJd, J2000, jdFromDate, length, type Vec3 } from './astro.ts';
 import { BodyView } from './bodies.ts';
 import { CameraRig } from './camera.ts';
-import { MOBILE, webglForced } from './device.ts';
+import {
+  APPLE_MOBILE,
+  GraphicsUnavailableError,
+  MOBILE,
+  preferredBackend,
+  probeGraphics,
+  requestedBackend,
+  webglForced,
+} from './device.ts';
 import { ResolutionGovernor } from './governor.ts';
 import { type LabelFrame, LabelLayer } from './labels.ts';
 import { SHARED } from './materials.ts';
 import { Orbits } from './orbits.ts';
 import { Belt, CometTail, Markers, Sky } from './particles.ts';
 import { QUALITY, type Settings } from './settings.ts';
+import { SolarActivity } from './sun.ts';
 import { type BodyState, SolarSystem } from './system.ts';
 import { TextureBank } from './textures.ts';
 
@@ -82,6 +92,8 @@ export class Engine {
   private belts: Belt[] = [];
   private readonly tails = new Map<string, CometTail>();
   private sky!: Sky;
+  /** Loops, prominences and eruptions on the Sun. */
+  activity!: SolarActivity;
   private labels!: LabelLayer;
   private light!: THREE.PointLight;
   /** Only phones trade resolution for frame rate; desktop always renders at the quality setting. */
@@ -127,17 +139,7 @@ export class Engine {
   async init(container: HTMLElement, labelRoot: HTMLElement, settings: Settings, onProgress: (p: number, label: string) => void) {
     this.container = container;
     this.settings = { ...settings };
-    this.renderer = new THREE.WebGPURenderer({
-      antialias: true,
-      logarithmicDepthBuffer: true,
-      powerPreference: 'high-performance',
-      forceWebGL: webglForced(),
-    });
-    this.renderer.onDeviceLost = (info: { message: string }) => {
-      this.renderer.setAnimationLoop(null);
-      this.emit('lost', info.message);
-    };
-    await this.renderer.init();
+    this.renderer = await this.createRenderer();
     this.backend = (this.renderer.backend as any).isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
@@ -176,6 +178,50 @@ export class Engine {
     onProgress(1, 'Ready');
   }
 
+  /**
+   * Starts a renderer, each attempt on a fresh canvas: a canvas that once gave out
+   * one kind of context never gives out another. WebGL is retried after a pause
+   * (iOS can refuse a context while the previous page's GPU memory is reclaimed),
+   * then without multisampling, the most common reason a driver turns one down.
+   */
+  private async createRenderer(): Promise<THREE.WebGPURenderer> {
+    const first = preferredBackend({
+      appleMobile: APPLE_MOBILE,
+      forced: webglForced(),
+      requested: requestedBackend(location.search),
+    });
+    const attempts = [
+      { webgl: first === 'webgl', antialias: true, wait: 0 },
+      { webgl: true, antialias: true, wait: 500 },
+      { webgl: true, antialias: false, wait: 500 },
+    ];
+    let failure: unknown = null;
+    for (const a of attempts) {
+      if (a.wait) await new Promise((done) => setTimeout(done, a.wait));
+      const renderer = new THREE.WebGPURenderer({
+        antialias: a.antialias,
+        logarithmicDepthBuffer: true,
+        powerPreference: 'high-performance',
+        forceWebGL: a.webgl,
+      });
+      renderer.onDeviceLost = (info: { message: string }) => {
+        if (renderer !== this.renderer) return;
+        renderer.setAnimationLoop(null);
+        this.emit('lost', info.message);
+      };
+      try {
+        await renderer.init();
+        return renderer;
+      } catch (err) {
+        failure = err;
+        // No dispose(): it would rerun the failed init() through setAnimationLoop and
+        // leave a rejected promise behind. A renderer that never started holds no context.
+        console.warn(`Renderer did not start (${a.webgl ? 'WebGL 2' : 'WebGPU'}${a.antialias ? '' : ', no MSAA'}):`, err);
+      }
+    }
+    throw new GraphicsUnavailableError(failure, probeGraphics(), APPLE_MOBILE);
+  }
+
   private buildScene(starData: Float32Array, labelRoot: HTMLElement) {
     const bodies = this.system.bodies;
     bodies.forEach((b, i) => {
@@ -206,6 +252,12 @@ export class Engine {
     this.scene.add(this.sky.buildStars(starData));
 
     const sun = this.system.get('sun')!;
+    this.activity = new SolarActivity(sun.def.physical.radius, sunActive, {
+      loopParticles: MOBILE ? 5000 : 14000,
+      eruptionParticles: MOBILE ? 900 : 2400,
+      seed: 17,
+    });
+    this.views.get('sun')!.group.add(this.activity.group);
     this.rig = new CameraRig(this.camera, sun, 4 * AU_KM);
     this.rig.onArrive = (b) => this.emit('arrive', b.def.id);
 
@@ -264,6 +316,7 @@ export class Engine {
       this.pipeline.needsUpdate = true;
     }
     if (this.pipelineNodes) this.pipelineNodes.flareGain.value = q.flare ? 1 : 0;
+    this.activity?.setDensity(q.belts);
     for (const belt of this.belts) {
       belt.setDensity(q.belts);
       belt.sprite.visible = s.belts;
@@ -515,14 +568,17 @@ export class Engine {
       const front = v3.z < 1 && v3.z > -1;
       this.screen.set(id, { x: (v3.x * 0.5 + 0.5) * this.width, y: (-v3.y * 0.5 + 0.5) * this.height, z: v3.z, front, px, dist });
       if (id === this.selectedId || id === this.rig.focus.def.id || px > 140) view.requestHighRes(this.bank);
+      // Shape models are small and change the outline, so they stream well before the maps.
+      else if (px > 6) view.requestShape();
     }
     const sunView = this.views.get('sun')!;
     SHARED.sunPos.value.copy(sunView.group.position);
     this.light.position.copy(sunView.group.position);
     // Ease the Sun down as its disk fills the view so the photosphere keeps its colour and texture.
     const sunFill = THREE.MathUtils.smoothstep(this.screen.get('sun')?.px ?? 0, 4, 90);
-    SHARED.sunGain.value = THREE.MathUtils.lerp(7, 1.35, sunFill);
+    SHARED.sunGain.value = THREE.MathUtils.lerp(7, 1.05, sunFill);
     SHARED.coronaGain.value = THREE.MathUtils.lerp(1, 0.3, sunFill);
+    this.activity.update(this.elapsed, this.screen.get('sun')?.px ?? 0);
     this.pipelineNodes.bloom.strength.value = THREE.MathUtils.lerp(0.6, 0.18, sunFill);
     // Lens ghosts pivot around the screen centre: a centred Sun would stack them into a ring.
     const sunSc = this.screen.get('sun');

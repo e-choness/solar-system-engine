@@ -1,0 +1,26 @@
+{
+  "67p": {
+    "radius": 2.6504,
+    "triangles": 40000
+  },
+  "wild2": {
+    "radius": 2.7594,
+    "triangles": 17518
+  },
+  "arrokoth": {
+    "radius": 19.4864,
+    "triangles": 30000
+  },
+  "didymos": {
+    "radius": 0.4489,
+    "triangles": 24000
+  },
+  "tempel1": {
+    "radius": 3.9738,
+    "triangles": 24000
+  },
+  "hartley2": {
+    "radius": 1.2614,
+    "triangles": 24000
+  }
+}

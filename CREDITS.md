@@ -15,7 +15,7 @@ Solar System stands on the work of spacecraft teams, mappers, astronomers and op
 
 | World | Source file | Author | License |
 | --- | --- | --- | --- |
-| Sun | [8k_sun.jpg](https://www.solarsystemscope.com/textures/) | Solar System Scope (INOVE) | CC BY 4.0 |
+| Sun | [SDO/AIA 304 Å Carrington map, rotation 2290 (16 Oct – 13 Nov 2024)](https://stereo-ssc.nascom.nasa.gov/data/ins_data/secchi/carrmaps/aia/cm/fits/cmAIA304cr2290C0.fts.gz) | NASA/SDO and the AIA science team; map by the NASA STEREO Science Center | Public domain |
 | Mercury | [8k_mercury.jpg](https://www.solarsystemscope.com/textures/) | Solar System Scope (INOVE) | CC BY 4.0 |
 | Venus (clouds) | [4k_venus_atmosphere.jpg](https://www.solarsystemscope.com/textures/) | Solar System Scope (INOVE) | CC BY 4.0 |
 | Earth | [8k_earth_daymap.jpg](https://www.solarsystemscope.com/textures/) | Solar System Scope (INOVE) | CC BY 4.0 |
@@ -63,6 +63,21 @@ Solar System stands on the work of spacecraft teams, mappers, astronomers and op
 Maps are resized to 2:1 equirectangular frames and re-encoded as WebP; CC BY-SA 3.0 derivatives stay under CC BY-SA 3.0.
 
 The Mercury, Venus, Mars and Neptune maps are also recolored to the planets’ measured colors, listed under Science data.
+
+The Sun map is an SDO/AIA 304 Å synoptic map toned to the photosphere’s color; its eruptions start from the map’s brightest active regions.
+
+## Shape models
+
+| World | Source | Author | License |
+| --- | --- | --- | --- |
+| 67P/Churyumov–Gerasimenko | [SPG SHAP4S plate model, 200k plates (RO-C-MULTI-5-67P-SHAPE-V2.0)](https://pdssbn.astro.umd.edu/holdings/ro-c-multi-5-67p-shape-v2.0/) | F. Preusker & F. Scholten (DLR); ESA/Rosetta/MPS for OSIRIS Team | ESA Rosetta archive data, free use with credit |
+| 81P/Wild 2 | [Stardust NAVCAM shape model of comet 81P/Wild 2, v2.1](https://pdssbn.astro.umd.edu/holdings/sdu-c-navcam-5-wild2-shape-model-v2.1/) | T. Farnham, T. Duxbury & J.-Y. Li; NASA Stardust | Public domain |
+| Arrokoth | [New Horizons shape model of (486958) Arrokoth (Porter et al. 2024)](https://pdssbn.astro.umd.edu/holdings/pds4-nh_derived:arrokoth_shapemodel_porter2024-v1.0/) | S. B. Porter et al.; NASA/JHUAPL/SwRI New Horizons | Public domain |
+| Didymos | [DART shape model of (65803) Didymos, v003 at 9.3 m (Daly et al. 2023)](https://pdssbn.astro.umd.edu/holdings/pds4-dart_shapemodel:data_derived_didymos_model_v003-v1.0/) | R. T. Daly et al.; NASA/Johns Hopkins APL DART | Public domain |
+| 9P/Tempel 1 | [Plate shape model of comet 9P/Tempel 1, v2.0](https://pdssbn.astro.umd.edu/holdings/dif-c-hriv_its_mri-5-tempel1-shape-v2.0/) | T. L. Farnham & P. C. Thomas; NASA Deep Impact | Public domain |
+| 103P/Hartley 2 | [Plate shape model of comet 103P/Hartley 2, v1.0](https://pdssbn.astro.umd.edu/holdings/dif-c-hriv_mri-5-hartley2-shape-v1.0/) | T. L. Farnham & P. C. Thomas; NASA EPOXI | Public domain |
+
+Small worlds without surface imagery switch to these measured shapes up close. Each is simplified with meshoptimizer to at most 40,000 triangles.
 
 ## Science data
 

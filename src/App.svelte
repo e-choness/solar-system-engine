@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { BODY_BY_ID } from './data/catalog.ts';
   import { AU_KM } from './engine/astro.ts';
-  import { forceWebGL, MOBILE, webglForced } from './engine/device.ts';
+  import { forceWebGL, GraphicsUnavailableError, MOBILE, webglForced } from './engine/device.ts';
   import Browser from './ui/Browser.svelte';
   import Credits from './ui/Credits.svelte';
   import Events from './ui/Events.svelte';
@@ -91,8 +91,17 @@
         if (engine.backend !== 'WebGPU' && !MOBILE) toast('WebGPU is unavailable in this browser — running on WebGL 2.', 'warn', 6000);
       } catch (err) {
         console.error(err);
+        if (err instanceof GraphicsUnavailableError) {
+          // No renderer would start at all: a reload can't change that, but the player may be able to.
+          const s = err.support;
+          app.errorTitle = err.title;
+          app.errorAdvice = err.advice;
+          app.error = `${err.message} (WebGPU ${s.webgpu ? 'yes' : 'no'} · WebGL 2 ${s.webgl2 ? 'yes' : 'no'} · WebGL ${s.webgl ? 'yes' : 'no'})`;
+          app.stage = 'error';
+          return;
+        }
         // A phone whose WebGPU driver can't run the engine may still manage WebGL 2.
-        if (MOBILE && !webglForced()) {
+        if (MOBILE && engine.backend === 'WebGPU' && !webglForced()) {
           forceWebGL();
           location.reload();
           return;

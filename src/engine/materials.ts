@@ -2,6 +2,7 @@ import {
   abs,
   cameraPosition,
   dot,
+  exp,
   Fn,
   float,
   fwidth,
@@ -39,6 +40,21 @@ type N = any; // TSL nodes are dynamically typed.
  */
 const LITE = MOBILE;
 
+/** One solar eruption's state, shared by the surface shader and the particles (see sun.ts). */
+export interface FlareSlot {
+  /** Unit direction of the erupting region in the Sun's body frame (mesh axes). */
+  site: N;
+  /** Seconds on the engine clock when it began; far in the past when the slot is idle. */
+  start: N;
+  /** 0..1 strength of the region. */
+  strength: N;
+  /** Brightness of the flare flash right now (set each frame). */
+  flash: N;
+}
+
+/** Eruptions that can run at once. */
+export const FLARE_SLOTS = 4;
+
 /** Scene-wide uniforms shared by every material. */
 export const SHARED = {
   /** Sun position relative to the camera (scene frame, km). */
@@ -47,6 +63,17 @@ export const SHARED = {
   sunGain: uniform(7),
   /** Corona brightness, eased down with the same curve. */
   coronaGain: uniform(1),
+  /** Engine clock in seconds, for effects scheduled from script. */
+  clock: uniform(0),
+  flares: Array.from(
+    { length: FLARE_SLOTS },
+    (): FlareSlot => ({
+      site: uniform(new THREE.Vector3(1, 0, 0)),
+      start: uniform(-1e6),
+      strength: uniform(0),
+      flash: uniform(0),
+    }),
+  ),
 };
 
 /** Per-body uniforms used for ring shadows and atmospheric scattering. */
@@ -326,28 +353,84 @@ export function ringMaterial(
   return { material, node };
 }
 
-/** Animated photosphere: texture + boiling granulation + limb darkening, in HDR. */
+/**
+ * Animated solar surface in HDR: the SDO/AIA 304 Å map with boiling granulation,
+ * a fine network finer than the map's pixels, and limb darkening. The map is a
+ * blur poleward of 72° (SDO sees the poles edge-on), so the noise takes over there.
+ * Flares light up their region as they erupt.
+ */
 export function sunMaterial(map: THREE.Texture, u: BodyUniforms): { material: THREE.MeshBasicNodeMaterial; node: N } {
   const node = texture(map);
   const material = new THREE.MeshBasicNodeMaterial();
   const p = normalize(positionLocal);
-  const gran = mx_fractal_noise_float(p.mul(9).add(vec3(time.mul(0.015), time.mul(-0.01), time.mul(0.012))), LITE ? 2 : 4, 2.3, 0.55)
+  const drift = vec3(time.mul(0.015), time.mul(-0.01), time.mul(0.012));
+  const gran = mx_fractal_noise_float(p.mul(9).add(drift), LITE ? 2 : 4, 2.3, 0.55)
     .mul(0.5)
     .add(0.5);
+  // Supergranulation-sized mottling, which also stands in for the map at the poles.
+  const network = mx_fractal_noise_float(p.mul(70).add(drift.mul(3)), LITE ? 1 : 3, 2.1, 0.5)
+    .mul(0.5)
+    .add(0.5);
+  // Below the map's 0.125° (1,500 km) pixels: only up close, faded out before it would shimmer.
+  const fine = mx_fractal_noise_float(p.mul(450).add(drift.mul(20)), LITE ? 1 : 2, 2.2, 0.5)
+    .mul(0.5)
+    .add(0.5);
+  const fineShown = smoothstep(0.004, 0.0012, length(fwidth(p)));
   const cells = LITE
     ? float(0.97)
     : smoothstep(0, 0.6, mx_worley_noise_float(p.mul(42).add(vec3(time.mul(0.02)))))
         .mul(0.25)
         .add(0.8);
+  const polar = smoothstep(0.9, 0.97, abs(p.y));
+  const detail = mix(network.mul(0.3).add(0.85), network.mul(0.9).add(0.55), polar).mul(mix(float(1), fine.mul(0.5).add(0.75), fineShown));
   const mu = saturate(dot(radial(u), viewDir()));
   const limb = pow(mu, 0.5).mul(0.75).add(0.25);
   const hot = vec3(1.0, 0.62, 0.22);
-  const surface = node.rgb
+  let surface: N = node.rgb
     .mul(1.1)
-    .add(hot.mul(gran.mul(0.55)))
-    .mul(cells);
+    .add(hot.mul(gran.mul(0.25)))
+    .mul(cells)
+    .mul(detail);
+  // Flares: a white-hot kernel a few thousand km wide inside a broader glow.
+  for (const f of SHARED.flares) {
+    const near = dot(p, f.site).sub(1);
+    const glow = exp(near.mul(4000))
+      .mul(5)
+      .add(exp(near.mul(300)).mul(0.8));
+    surface = surface.add(vec3(1, 0.9, 0.7).mul(glow.mul(f.flash)));
+  }
   material.colorNode = surface.mul(limb).mul(SHARED.sunGain);
   return { material, node };
+}
+
+/**
+ * The chromosphere seen at the limb: a thin red fringe of spicules, jets of
+ * plasma about 10,000 km tall, flickering as they rise and fall. Rendered on the
+ * back faces of a shell (like the atmospheres), so the disk itself hides it.
+ */
+export function chromosphereMaterial(u: BodyUniforms, height: number): THREE.MeshBasicNodeMaterial {
+  const material = new THREE.MeshBasicNodeMaterial({
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  material.colorNode = Fn(() => {
+    const ray = normalize(positionWorld.sub(cameraPosition));
+    const along = max(dot(u.center.sub(cameraPosition), ray), 0);
+    const closest = cameraPosition.add(ray.mul(along));
+    const h = length(closest.sub(u.center)).div(u.radius).sub(1).div(height);
+    const dir = normalize(closest.sub(u.center));
+    // Height of the spicule forest along this line of sight, 0..1 of the shell.
+    const forest = mx_fractal_noise_float(dir.mul(160).add(vec3(0, time.mul(0.25), 0)), LITE ? 1 : 2, 2, 0.5)
+      .mul(0.5)
+      .add(0.5);
+    const top = forest.mul(0.75).add(0.25);
+    const base = smoothstep(0.35, 0, h);
+    const spicules = smoothstep(top, top.mul(0.6), h).mul(0.7);
+    return vec3(1.0, 0.32, 0.12).mul(base.add(spicules)).mul(step(0, h)).mul(SHARED.sunGain.mul(0.5));
+  })();
+  return material;
 }
 
 /** Soft corona sprite around the Sun. */
