@@ -217,7 +217,7 @@ It is a ground-up remake of the [original 2021 Unity game](https://echoness.itch
 | UI | [Svelte](https://svelte.dev) 5.57.3 (runes), Lucide icons, glass design system |
 | Audio | Web Audio API: streamed soundtrack, spacecraft recordings, real-time synthesis for sonifications, convolution reverb |
 | Build | [Vite](https://vite.dev) 8.3.5 (Rolldown), [TypeScript](https://www.typescriptlang.org) 6.0.3, [Biome](https://biomejs.dev) 2.6.4, [Vitest](https://vitest.dev) 5.0.5 |
-| Assets | sharp, ffmpeg and JPL Horizons scripts, all run in Docker |
+| Assets | sharp, ffmpeg, KTX-Software and JPL Horizons scripts, all run in Docker; maps ship as WebP plus GPU-compressed KTX2 (Basis Universal) |
 | Delivery | GitHub Actions → Docker build → [butler](https://itch.io/docs/butler/) → itch.io, plus [GitHub Pages](https://e-choness.github.io/solar-system-engine/) |
 <!-- /auto:stack -->
 
@@ -243,6 +243,7 @@ Asset and data pipelines:
 
 ```sh
 docker compose run --rm node npm run assets          # download and optimise maps, recordings, star catalogue
+docker compose run --rm node npm run assets ktx2     # re-encode the GPU-compressed KTX2 tiers from the shipped maps
 docker compose run --rm node npm run ephemeris       # refresh orbital elements from JPL Horizons
 docker compose run --rm browser node scripts/smoke.mjs earth saturn   # headless screenshots in .cache/smoke
 docker compose run --rm browser npm run media        # regenerate the media kit (needs the dev server)

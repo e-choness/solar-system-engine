@@ -1,10 +1,11 @@
 // Downloads open-licensed textures, recordings, shape models and the bright-star catalog,
 // optimises them, and records attribution in src/data/generated/credits.json.
 //
-// Run in Docker: docker compose run --rm node npm run assets [textures|audio|stars|shapes|mid] [ids…]
-import { execFileSync } from 'node:child_process';
+// Run in Docker: docker compose run --rm node npm run assets [textures|audio|stars|shapes|mid|ktx2] [ids…]
+import { execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import zlib from 'node:zlib';
 import { MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
@@ -17,6 +18,7 @@ const CREDITS = path.resolve('src/data/generated/credits.json');
 const MID_LIST = path.resolve('src/data/generated/mid-textures.json');
 /** Long edge of the tier phones stream instead of the full-resolution map. */
 const MID_SIZE = 2048;
+const execFileAsync = promisify(execFile);
 const UA = { 'User-Agent': 'solar-system-engine asset pipeline (https://github.com/e-choness/solar-system-engine)' };
 
 const SSS = 'https://www.solarsystemscope.com/textures/download/';
@@ -29,6 +31,8 @@ const AIA_MAPS = 'https://stereo-ssc.nascom.nasa.gov/data/ins_data/secchi/carrma
 const SUN_ACTIVE = path.resolve('src/data/generated/sun-active.json');
 const SHAPES_DIR = path.resolve('public/shapes');
 const SHAPE_LIST = path.resolve('src/data/generated/shapes.json');
+const KTX2_LIST = path.resolve('src/data/generated/ktx2-textures.json');
+const KTX2_TMP = path.resolve('.asset-cache/ktx2');
 
 /**
  * id → source: Solar System Scope (`sss`), Wikimedia Commons titles tried in
@@ -36,7 +40,9 @@ const SHAPE_LIST = path.resolve('src/data/generated/shapes.json');
  * long edge of the high-res variant; every texture also gets a 1024 px `.lo`
  * variant that loads first, and maps wider than MID_SIZE a `.mid` variant for
  * phones. `match` scales a map so its mean color equals the
- * body's catalog color (for greyscale or albedo maps).
+ * body's catalog color (for greyscale or albedo maps). `linear` marks data maps
+ * that are not sRGB color (as LINEAR in src/engine/textures.ts does), and `ktx`
+ * forces one codec for every KTX2 tier (see writeKtx2).
  *
  * `truth` recolors a map to the planet's measured color (see trueColor), as
  * linear sRGB: the geometric albedos of Mallama, Krobusek & Pavlov 2017 (Icarus
@@ -61,9 +67,9 @@ const TEXTURES = {
   'venus-atmosphere': { sss: '4k_venus_atmosphere.jpg', size: 4096, truth: [0.7, 0.6903, 0.6465] },
   earth: { sss: '8k_earth_daymap.jpg', size: 4096 },
   'earth-night': { sss: '8k_earth_nightmap.jpg', size: 4096 },
-  'earth-clouds': { sss: '8k_earth_clouds.jpg', size: 4096, grey: true },
-  'earth-normal': { sss: '8k_earth_normal_map.tif', size: 4096, quality: 92 },
-  'earth-specular': { sss: '8k_earth_specular_map.tif', size: 2048, grey: true },
+  'earth-clouds': { sss: '8k_earth_clouds.jpg', size: 4096, grey: true, linear: true },
+  'earth-normal': { sss: '8k_earth_normal_map.tif', size: 4096, quality: 92, linear: true, ktx: 'uastc' },
+  'earth-specular': { sss: '8k_earth_specular_map.tif', size: 2048, grey: true, linear: true },
   moon: { sss: '8k_moon.jpg', size: 4096 },
   mars: { sss: '8k_mars.jpg', size: 4096, truth: [0.2574, 0.1686, 0.0892] },
   jupiter: { sss: '8k_jupiter.jpg', size: 4096 },
@@ -75,8 +81,9 @@ const TEXTURES = {
   eris: { sss: '4k_eris_fictional.jpg', size: 2048, impression: true },
   haumea: { sss: '4k_haumea_fictional.jpg', size: 2048, impression: true },
   makemake: { sss: '4k_makemake_fictional.jpg', size: 2048, impression: true },
-  // Nothing streams the sky past its `.lo` tier, so it needs no `.mid`.
-  stars: { sss: '8k_stars_milky_way.jpg', size: 8192, quality: 82, mid: false },
+  // Nothing streams the sky past its `.lo` tier, so it needs no `.mid`. That tier is magnified
+  // across the whole sky, where ETC1S blocks would show around every star.
+  stars: { sss: '8k_stars_milky_way.jpg', size: 8192, quality: 82, mid: false, ktx: 'uastc' },
 
   ceres: {
     // Dawn Framing Camera, 140 m/px; centred on 180° E.
@@ -592,6 +599,80 @@ function writeMidList() {
   console.log(`mid  ${ids.length} textures have a ${MID_SIZE} px tier`);
 }
 
+/** Long edge of each GPU-compressed tier: `.lo` everyone preloads, `.mid` phones stream up close. */
+const KTX2_TIERS = { lo: 1024, mid: MID_SIZE };
+/** ETC1S: about a WebP's download, 4–8 bits per texel on the GPU, softer detail. */
+const ETC1S = ['--encode', 'basis-lz', '--clevel', '4', '--qlevel', '255'];
+/** UASTC: near-lossless (SSIM ≥ 0.998 against the WebP), about 3.5× its download. */
+const UASTC = (lambda) => [
+  ...['--encode', 'uastc', '--uastc-quality', '2', '--uastc-rdo', '--uastc-rdo-l', String(lambda)],
+  ...['--uastc-rdo-d', '32768', '--zstd', '20'],
+];
+const pow2 = (n) => 2 ** Math.ceil(Math.log2(n));
+
+/**
+ * Writes Basis Universal KTX2 copies of a shipped map, which the GPU samples
+ * without unpacking: 4–8× less memory than a decoded WebP and no image decode
+ * on the main thread. `.lo` is ETC1S, since it's only seen from afar; `.mid`, the
+ * tier phones see up close, is UASTC so craters stay sharp. Desktops keep the
+ * full-resolution WebP. Sizes round up to powers of two because WebGL requires
+ * compressed mip levels to be multiples of the 4 px block. Rows are stored bottom-up to
+ * match three's flipY for images.
+ */
+async function writeKtx2(id, spec) {
+  const hi = path.join(TEX, `${id}.webp`);
+  if (!fs.existsSync(hi)) return;
+  fs.mkdirSync(KTX2_TMP, { recursive: true });
+  const { width, height, hasAlpha } = await sharp(hi).metadata();
+  const format = `R8G8B8${hasAlpha ? 'A8' : ''}_${spec.linear ? 'UNORM' : 'SRGB'}`;
+  for (const [tier, edge] of Object.entries(KTX2_TIERS)) {
+    const scale = Math.min(1, edge / width);
+    const w = pow2(width * scale);
+    const h = pow2(height * scale);
+    const out = path.join(TEX, `${id}.${tier}.ktx2`);
+    if (tier === 'mid' && (spec.mid === false || w <= KTX2_TIERS.lo)) {
+      fs.rmSync(out, { force: true });
+      continue;
+    }
+    const png = path.join(KTX2_TMP, `${id}.${tier}.png`);
+    const img = sharp(hi, { limitInputPixels: false }).resize(w, h, { fit: 'fill' }).toColourspace('srgb');
+    await (hasAlpha ? img.ensureAlpha() : img.removeAlpha()).png({ compressionLevel: 1 }).toFile(png);
+    const codec = (spec.ktx ?? (tier === 'lo' ? 'etc1s' : 'uastc')) === 'etc1s' ? ETC1S : UASTC(spec.linear ? 0.5 : 1);
+    await execFileAsync('ktx', [
+      ...['create', '--format', format, '--assign-tf', spec.linear ? 'linear' : 'srgb', '--assign-primaries', 'bt709'],
+      ...['--convert-texcoord-origin', 'bottom-left', '--generate-mipmap', '--threads', '8', ...codec, png, out],
+    ]);
+    fs.rmSync(png);
+    const kb = (fs.statSync(out).size / 1024) | 0;
+    console.log(
+      `ktx2 ${`${id}.${tier}`.padEnd(22)} ${`${w}×${h}`.padEnd(10)} ${String(kb).padStart(6)} KB  ${codec === ETC1S ? 'ETC1S' : 'UASTC'}`,
+    );
+  }
+}
+
+/** The texture bank asks for a KTX2 tier only when this list says it exists. */
+function writeKtx2List() {
+  const files = fs.readdirSync(TEX);
+  const list = (tier) =>
+    files
+      .filter((f) => f.endsWith(`.${tier}.ktx2`))
+      .map((f) => f.slice(0, -`.${tier}.ktx2`.length))
+      .sort();
+  const out = { lo: list('lo'), mid: list('mid') };
+  fs.writeFileSync(KTX2_LIST, `${JSON.stringify(out, null, 2)}\n`);
+  console.log(`ktx2 ${out.lo.length} maps have a compressed .lo tier, ${out.mid.length} a compressed .mid tier`);
+}
+
+/** Runs `fn` over `items`, at most `n` at a time. */
+async function pool(items, n, fn) {
+  const queue = [...items];
+  await Promise.all(
+    Array.from({ length: n }, async () => {
+      while (queue.length) await fn(queue.shift());
+    }),
+  );
+}
+
 async function writeTexture(id, raw, spec) {
   const encode = (img) => webp(img, spec);
   const base = spec.aia
@@ -607,6 +688,7 @@ async function writeTexture(id, raw, spec) {
     await encode(prep(base.clone()).resize({ width: spec.size })).toFile(path.join(TEX, `${id}.webp`));
     await encode(prep(base.clone()).resize({ width: 1024 })).toFile(path.join(TEX, `${id}.lo.webp`));
     await writeMid(id, spec);
+    await writeKtx2(id, spec);
     return;
   }
   // Planet maps are forced to an exact 2:1 equirectangular frame.
@@ -618,6 +700,7 @@ async function writeTexture(id, raw, spec) {
   ).toFile(path.join(TEX, `${id}.webp`));
   await encode(prep(base.clone()).removeAlpha().resize(1024, 512, { fit: 'fill' })).toFile(path.join(TEX, `${id}.lo.webp`));
   await writeMid(id, spec);
+  await writeKtx2(id, spec);
 }
 
 async function textures(credits, ids) {
@@ -654,6 +737,7 @@ async function textures(credits, ids) {
     console.log(`tex  ${id.padEnd(18)} ${String(kb).padStart(6)} KB  ${source.credit.license}  ← ${source.credit.title}`);
   }
   writeMidList();
+  writeKtx2List();
 }
 
 async function recordings(credits) {
@@ -915,6 +999,13 @@ if (only === 'mid') {
   // Backfills the phone tier from the shipped maps without touching the sources.
   for (const [id, spec] of Object.entries(TEXTURES)) await writeMid(id, spec);
   writeMidList();
+}
+if (only === 'ktx2') {
+  // Backfills the KTX2 tiers from the shipped maps; each `ktx` run is itself multithreaded.
+  const ids = process.argv.slice(3);
+  const todo = Object.entries(TEXTURES).filter(([id]) => !ids.length || ids.includes(id));
+  await pool(todo, 4, ([id, spec]) => writeKtx2(id, spec));
+  writeKtx2List();
 }
 
 const previous = fs.existsSync(CREDITS) ? JSON.parse(fs.readFileSync(CREDITS, 'utf8')) : {};

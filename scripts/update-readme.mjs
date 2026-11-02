@@ -129,7 +129,7 @@ const sections = {
     `| UI | [Svelte](https://svelte.dev) ${ver('svelte')} (runes), Lucide icons, glass design system |`,
     `| Audio | Web Audio API: streamed soundtrack, spacecraft recordings, real-time synthesis for sonifications, convolution reverb |`,
     `| Build | [Vite](https://vite.dev) ${ver('vite')} (Rolldown), [TypeScript](https://www.typescriptlang.org) ${ver('typescript')}, [Biome](https://biomejs.dev) ${ver('@biomejs/biome')}, [Vitest](https://vitest.dev) ${ver('vitest')} |`,
-    `| Assets | sharp, ffmpeg and JPL Horizons scripts, all run in Docker |`,
+    `| Assets | sharp, ffmpeg, KTX-Software and JPL Horizons scripts, all run in Docker; maps ship as WebP plus GPU-compressed KTX2 (Basis Universal) |`,
     `| Delivery | GitHub Actions → Docker build → [butler](https://itch.io/docs/butler/) → itch.io, plus [GitHub Pages](${PAGES}) |`,
   ].join('\n'),
 
@@ -206,7 +206,7 @@ const creditsMd = [
       `| ${nameOf(id)}${c.impression ? ' _(artist’s impression)_' : ''} | [${clean(c.title)}](${c.url}) | ${clean(c.author).slice(0, 140)} | ${c.license} |`,
   ),
   '',
-  'Maps are resized to 2:1 equirectangular frames and re-encoded as WebP; CC BY-SA 3.0 derivatives stay under CC BY-SA 3.0.',
+  'Maps are resized to 2:1 equirectangular frames and re-encoded as WebP, with GPU-compressed KTX2 copies of the distant and phone tiers; CC BY-SA 3.0 derivatives stay under CC BY-SA 3.0.',
   '',
   'The Mercury, Venus, Mars and Neptune maps are also recolored to the planets’ measured colors, listed under Science data.',
   '',
@@ -242,8 +242,9 @@ const creditsMd = [
   '| Package | Version | License |',
   '| --- | --- | --- |',
   ...softwareRows,
+  '| [Basis Universal transcoder](https://github.com/BinomialLLC/basis_universal) (bundled with three.js) | — | Apache-2.0 |',
   '',
-  `Development tools: Vite, Svelte, TypeScript, Biome, Vitest, Playwright, sharp (see \`package.json\`).`,
+  `Development tools: Vite, Svelte, TypeScript, Biome, Vitest, Playwright, sharp (see \`package.json\`), and Khronos [KTX-Software](https://github.com/KhronosGroup/KTX-Software) (Apache-2.0) to encode the KTX2 maps.`,
   '',
 ].join('\n');
 fs.writeFileSync('CREDITS.md', creditsMd);

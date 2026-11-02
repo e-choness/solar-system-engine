@@ -1,11 +1,20 @@
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import * as THREE from 'three/webgpu';
+import ktx2Textures from '../data/generated/ktx2-textures.json' with { type: 'json' };
 import midTextures from '../data/generated/mid-textures.json' with { type: 'json' };
 
 const BASE = `${import.meta.env.BASE_URL}textures/`;
-/** Data maps that must stay linear (everything else is sRGB color). */
+/** Data maps that must stay linear (everything else is sRGB color); `linear` in scripts/fetch-assets.mjs. */
 const LINEAR = new Set(['earth-normal', 'earth-specular', 'earth-clouds']);
-/** Maps with a 2048 px tier; every other map is that size or smaller already. */
+/** Maps with a 2048 px WebP tier; every other map is that size or smaller already. */
 const MID = new Set<string>(midTextures);
+/** Maps with GPU-compressed copies of a tier (see writeKtx2 in scripts/fetch-assets.mjs). */
+const KTX2 = { lo: new Set<string>(ktx2Textures.lo), mid: new Set<string>(ktx2Textures.mid) };
+
+type Tier = 'lo' | 'mid' | 'hi';
+interface Loader {
+  loadAsync(url: string): Promise<THREE.Texture>;
+}
 /** A map used this recently is on screen, however far over budget the bank is. */
 const IN_USE_MS = 5000;
 
@@ -31,9 +40,14 @@ export interface TextureBudget {
  * startup and a full-resolution variant fetched on demand when the camera
  * approaches (or the player selects) a body. A budget caps that second tier on
  * devices that could not hold it all.
+ *
+ * Once `useCompressed` is called, the `.lo` and `.mid` tiers load as KTX2, which
+ * stays compressed in GPU memory. A failed KTX2 load falls back to WebP for the
+ * rest of the session.
  */
 export class TextureBank {
-  private readonly loader = new THREE.TextureLoader();
+  private readonly loader: Loader = new THREE.TextureLoader();
+  private ktx2: Loader | null = null;
   private readonly entries = new Map<string, Entry>();
   private anisotropy = 8;
 
@@ -51,14 +65,50 @@ export class TextureBank {
     this.anisotropy = a;
   }
 
+  /**
+   * Loads KTX2 tiers from here on, transcoded in workers to whatever block format
+   * the GPU samples (ASTC, BC7, ETC2…). Call after `renderer.init()`.
+   */
+  useCompressed(renderer: THREE.WebGPURenderer) {
+    this.ktx2 = new KTX2Loader().setTranscoderPath(`${import.meta.env.BASE_URL}basis/`).detectSupport(renderer);
+  }
+
+  /** True while maps load as KTX2. */
+  get compressed() {
+    return this.ktx2 !== null;
+  }
+
   private configure(id: string, t: THREE.Texture) {
     t.colorSpace = LINEAR.has(id) ? THREE.NoColorSpace : THREE.SRGBColorSpace;
     t.wrapS = id === 'saturn-ring' ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
     t.wrapT = THREE.ClampToEdgeWrapping;
     t.anisotropy = this.anisotropy;
-    t.generateMipmaps = true;
+    // KTX2 files carry their own mip chain; the GPU can't build one for block-compressed data.
+    t.generateMipmaps = !(t as THREE.CompressedTexture).isCompressedTexture;
     t.minFilter = THREE.LinearMipmapLinearFilter;
     return t;
+  }
+
+  /** Loads one tier of a map: its KTX2 copy if there is one, otherwise (or if that fails) the WebP. */
+  private async load(id: string, tier: Tier): Promise<THREE.Texture> {
+    const ktx2 = this.ktx2;
+    if (ktx2 && tier !== 'hi' && KTX2[tier].has(id)) {
+      try {
+        return await ktx2.loadAsync(`${BASE}${id}.${tier}.ktx2`);
+      } catch (err) {
+        // Most likely no WebAssembly or no workers, so every other KTX2 load would fail too.
+        if (this.ktx2) console.warn(`texture ${id}: KTX2 failed to load, using WebP from now on`, err);
+        this.ktx2 = null;
+      }
+    }
+    const file = tier === 'lo' ? `${id}.lo` : tier === 'mid' && MID.has(id) ? `${id}.mid` : id;
+    return this.loader.loadAsync(`${BASE}${file}.webp`);
+  }
+
+  /** The tier to stream up close: phones take at most 2048 px, as KTX2 if they can. */
+  private closeTier(id: string): Tier {
+    if (!this.budget?.mid) return 'hi';
+    return MID.has(id) || (this.ktx2 && KTX2.mid.has(id)) ? 'mid' : 'hi';
   }
 
   /** Preloads the low-resolution tier for a list of texture ids. */
@@ -67,7 +117,7 @@ export class TextureBank {
     this.onProgress?.(0, ids.length);
     await Promise.all(
       ids.map(async (id) => {
-        const lo = this.configure(id, await this.loader.loadAsync(`${BASE}${id}.lo.webp`));
+        const lo = this.configure(id, await this.load(id, 'lo'));
         this.entries.set(id, { lo, hi: null, hiPromise: null, listeners: [], used: 0 });
         this.onProgress?.(++loaded, ids.length);
       }),
@@ -99,9 +149,7 @@ export class TextureBank {
     if (!e) return null;
     e.used = performance.now();
     if (!e.hiPromise) {
-      const file = this.budget?.mid && MID.has(id) ? `${id}.mid` : id;
-      e.hiPromise = this.loader
-        .loadAsync(`${BASE}${file}.webp`)
+      e.hiPromise = this.load(id, this.closeTier(id))
         .then((t) => {
           e.hi = this.configure(id, t);
           for (const fn of e.listeners) fn(e.hi);

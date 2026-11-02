@@ -152,6 +152,8 @@ export class Engine {
       MOBILE ? { mid: true, keep: MOBILE_HIGH_MAPS } : undefined,
     );
     this.bank.setAnisotropy(QUALITY[settings.quality].anisotropy);
+    // `?textures=webp` keeps every map uncompressed on the GPU, for comparison.
+    if (new URLSearchParams(location.search).get('textures') !== 'webp') this.bank.useCompressed(this.renderer);
     const ids = new Set<string>(['stars']);
     for (const b of this.system.bodies) {
       const v = b.def.visual;

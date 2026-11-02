@@ -22,7 +22,7 @@ services:
 
   node:
     <<: *app
-    build: { context: ., target: base }
+    build: { context: ., target: tools }
     profiles: [tools]
     command: ["npm", "run", "check"]
 
