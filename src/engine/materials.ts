@@ -433,7 +433,12 @@ export function chromosphereMaterial(u: BodyUniforms, height: number): THREE.Mes
   return material;
 }
 
-/** Soft corona sprite around the Sun. */
+/**
+ * Corona sprite around the Sun (16 radii across). From afar, `coronaGain` scales a
+ * wide glow that makes the Sun read as a bright star. Up close that glow is eased
+ * out and only the inner corona is left: it falls off as r⁻⁵ from the limb, so
+ * the sky behind the prominences and plasma threads stays dark.
+ */
 export function coronaMaterial(): THREE.SpriteNodeMaterial {
   const material = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   const d = length(uv().sub(0.5)).mul(2);
@@ -445,6 +450,9 @@ export function coronaMaterial(): THREE.SpriteNodeMaterial {
   const outer = pow(saturate(oneMinus(d)), 2.2)
     .mul(streamers.mul(0.6).add(0.4))
     .mul(0.6);
-  material.colorNode = vec3(1.0, 0.78, 0.5).mul(inner.add(outer)).mul(SHARED.coronaGain);
+  const tight = pow(max(d.mul(8), 1), -5)
+    .mul(streamers.mul(0.7).add(0.3))
+    .mul(0.6);
+  material.colorNode = vec3(1.0, 0.78, 0.5).mul(inner.add(outer).mul(SHARED.coronaGain).add(tight));
   return material;
 }

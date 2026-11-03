@@ -256,6 +256,7 @@ export class Engine {
     const sun = this.system.get('sun')!;
     this.activity = new SolarActivity(sun.def.physical.radius, sunActive, {
       loopParticles: MOBILE ? 5000 : 14000,
+      threadParticles: MOBILE ? 5000 : 16000,
       eruptionParticles: MOBILE ? 900 : 2400,
       seed: 17,
     });
@@ -579,8 +580,9 @@ export class Engine {
     // Ease the Sun down as its disk fills the view so the photosphere keeps its colour and texture.
     const sunFill = THREE.MathUtils.smoothstep(this.screen.get('sun')?.px ?? 0, 4, 90);
     SHARED.sunGain.value = THREE.MathUtils.lerp(7, 1.05, sunFill);
-    SHARED.coronaGain.value = THREE.MathUtils.lerp(1, 0.3, sunFill);
-    this.activity.update(this.elapsed, this.screen.get('sun')?.px ?? 0);
+    // The wide glow gives way to the tight inner corona, so close-ups keep a dark sky behind the plasma.
+    SHARED.coronaGain.value = THREE.MathUtils.lerp(1, 0.04, sunFill);
+    this.activity.update(this.elapsed, this.screen.get('sun')?.px ?? 0, this.pixelsPerRadian);
     this.pipelineNodes.bloom.strength.value = THREE.MathUtils.lerp(0.6, 0.18, sunFill);
     // Lens ghosts pivot around the screen centre: a centred Sun would stack them into a ring.
     const sunSc = this.screen.get('sun');
